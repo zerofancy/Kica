@@ -1,0 +1,75 @@
+CREATE TABLE history_entry (
+    comic_id TEXT NOT NULL PRIMARY KEY,
+    comic_json TEXT NOT NULL,
+    episode_id TEXT NOT NULL,
+    episode_title TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE reading_progress (
+    comic_id TEXT NOT NULL,
+    episode_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    reader_mode TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (comic_id, episode_id)
+);
+
+CREATE TABLE download_task (
+    id TEXT NOT NULL PRIMARY KEY,
+    comic_json TEXT NOT NULL,
+    episode_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    completed_pages INTEGER NOT NULL,
+    total_pages INTEGER NOT NULL,
+    retry_count INTEGER NOT NULL,
+    target_location TEXT NOT NULL,
+    error TEXT
+);
+
+CREATE TABLE app_setting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+selectHistory:
+SELECT * FROM history_entry ORDER BY updated_at DESC;
+
+upsertHistory:
+INSERT OR REPLACE INTO history_entry(
+    comic_id, comic_json, episode_id, episode_title, page_index, updated_at
+) VALUES (?, ?, ?, ?, ?, ?);
+
+selectProgress:
+SELECT * FROM reading_progress WHERE comic_id = ? AND episode_id = ?;
+
+upsertProgress:
+INSERT OR REPLACE INTO reading_progress(
+    comic_id, episode_id, page_index, reader_mode, updated_at
+) VALUES (?, ?, ?, ?, ?);
+
+selectDownloads:
+SELECT * FROM download_task ORDER BY id;
+
+upsertDownload:
+INSERT OR REPLACE INTO download_task(
+    id, comic_json, episode_json, status, completed_pages, total_pages,
+    retry_count, target_location, error
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteDownload:
+DELETE FROM download_task WHERE id = ?;
+
+selectSetting:
+SELECT value FROM app_setting WHERE key = ?;
+
+selectSettings:
+SELECT * FROM app_setting;
+
+upsertSetting:
+INSERT OR REPLACE INTO app_setting(key, value) VALUES (?, ?);
+
+clearCache:
+DELETE FROM history_entry;
+
