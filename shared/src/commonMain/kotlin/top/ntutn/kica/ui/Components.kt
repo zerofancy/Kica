@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.material3.Card
@@ -104,15 +105,20 @@ fun ComicGrid(
         EmptyContent(modifier)
         return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
-        modifier = modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        items(comics, key = { it.id }) { comic ->
-            ComicCard(comic, onComicClick)
+    val gridState = rememberLazyGridState()
+    Box(modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(150.dp),
+            modifier = Modifier.fillMaxSize(),
+            state = gridState,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(comics, key = { it.id }) { comic ->
+                ComicCard(comic, onComicClick)
+            }
         }
+        PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
     }
 }
 

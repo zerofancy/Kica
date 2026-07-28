@@ -1,0 +1,37 @@
+package top.ntutn.kica.ui
+
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+
+@Composable
+internal expect fun PlatformHorizontalScrollbar(
+    state: LazyListState,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+internal expect fun PlatformHorizontalScrollbar(
+    state: ScrollState,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+internal expect fun PlatformVerticalScrollbar(
+    state: LazyListState,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+internal expect fun PlatformVerticalScrollbar(
+    state: LazyGridState,
+    modifier: Modifier = Modifier,
+)
+
+@Composable
+internal expect fun PlatformVerticalScrollbar(
+    state: ScrollState,
+    modifier: Modifier = Modifier,
+)

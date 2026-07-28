@@ -276,14 +276,19 @@ private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) 
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
     LoadStateContent(state, onRetry = { refresh++ }) { (recommendedItems, randomItems) ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            item { SectionTitle(stringResource(Res.string.recommended)) }
-            item { HorizontalComicRow(recommendedItems, onComicClick) }
-            item { SectionTitle(stringResource(Res.string.random_comics)) }
-            item { HorizontalComicRow(randomItems, onComicClick) }
+        val listState = rememberLazyListState()
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                item { SectionTitle(stringResource(Res.string.recommended)) }
+                item { HorizontalComicRow(recommendedItems, onComicClick) }
+                item { SectionTitle(stringResource(Res.string.random_comics)) }
+                item { HorizontalComicRow(randomItems, onComicClick) }
+            }
+            PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
         }
     }
 }
@@ -294,10 +299,18 @@ private fun HorizontalComicRow(comics: List<ComicSummary>, onComicClick: (ComicS
         Text(stringResource(Res.string.empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(comics, key = { it.id }) { comic ->
-            Box(Modifier.width(160.dp)) { ComicCard(comic, onComicClick) }
+    val listState = rememberLazyListState()
+    Column(Modifier.fillMaxWidth()) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(comics, key = { it.id }) { comic ->
+                Box(Modifier.width(160.dp)) { ComicCard(comic, onComicClick) }
+            }
         }
+        PlatformHorizontalScrollbar(listState)
     }
 }
 
@@ -314,6 +327,8 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
         value = runCatching { repository.ranking(selected) }
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
+    val categoriesListState = rememberLazyListState()
+    val rankPeriodsListState = rememberLazyListState()
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.discover)) {
@@ -324,30 +339,48 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
         Text(stringResource(Res.string.categories), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         when (val categoryValue = categoriesState) {
-            is LoadState.Data -> LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(categoryValue.value) { category ->
-                    FilterChip(selected = false, onClick = { onNavigate(AppRoute.Search) }, label = { Text(category) })
+            is LoadState.Data -> Column(Modifier.fillMaxWidth()) {
+                LazyRow(
+                    state = categoriesListState,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(categoryValue.value) { category ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { onNavigate(AppRoute.Search) },
+                            label = { Text(category) },
+                        )
+                    }
                 }
+                PlatformHorizontalScrollbar(categoriesListState)
             }
             is LoadState.Error -> Text(categoryValue.message, color = MaterialTheme.colorScheme.error)
             else -> LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(20.dp))
         Text(stringResource(Res.string.ranking), style = MaterialTheme.typography.titleMedium)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(RankPeriod.entries) { period ->
-                val label = when (period) {
-                    RankPeriod.HOURS_24 -> Res.string.rank_24h
-                    RankPeriod.DAYS_7 -> Res.string.rank_7d
-                    RankPeriod.DAYS_30 -> Res.string.rank_30d
-                    RankPeriod.KNIGHT -> Res.string.rank_knight
+        Column(Modifier.fillMaxWidth()) {
+            LazyRow(
+                state = rankPeriodsListState,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(RankPeriod.entries) { period ->
+                    val label = when (period) {
+                        RankPeriod.HOURS_24 -> Res.string.rank_24h
+                        RankPeriod.DAYS_7 -> Res.string.rank_7d
+                        RankPeriod.DAYS_30 -> Res.string.rank_30d
+                        RankPeriod.KNIGHT -> Res.string.rank_knight
+                    }
+                    FilterChip(
+                        selected = selected == period,
+                        onClick = { selected = period },
+                        label = { Text(stringResource(label)) },
+                    )
                 }
-                FilterChip(
-                    selected = selected == period,
-                    onClick = { selected = period },
-                    label = { Text(stringResource(label)) },
-                )
             }
+            PlatformHorizontalScrollbar(rankPeriodsListState)
         }
         Spacer(Modifier.height(12.dp))
         Box(Modifier.weight(1f)) {
@@ -425,32 +458,40 @@ private fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSumm
 @Composable
 private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -> Unit) {
     val historyItems by library.history().collectAsState(initial = emptyList())
+    val listState = rememberLazyListState()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.history))
         if (historyItems.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(historyItems, key = { it.comic.id }) { entry ->
-                    Card(Modifier.fillMaxWidth().clickable { onClick(entry) }) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(
-                                model = entry.comic.coverUrl,
-                                contentDescription = entry.comic.title,
-                                modifier = Modifier.size(64.dp),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(entry.comic.title, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "${entry.episodeTitle} · ${entry.pageIndex + 1}",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Box(Modifier.weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(historyItems, key = { it.comic.id }) { entry ->
+                        Card(Modifier.fillMaxWidth().clickable { onClick(entry) }) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AsyncImage(
+                                    model = entry.comic.coverUrl,
+                                    contentDescription = entry.comic.title,
+                                    modifier = Modifier.size(64.dp),
+                                    contentScale = ContentScale.Crop,
                                 )
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(entry.comic.title, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "${entry.episodeTitle} · ${entry.pageIndex + 1}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
                 }
+                PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
             }
         }
     }
@@ -460,46 +501,54 @@ private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) ->
 private fun DownloadsScreen(coordinator: DownloadCoordinator) {
     val tasks by coordinator.tasks.collectAsState()
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.downloads))
         if (tasks.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(tasks, key = { it.id }) { task ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(task.comic.title, style = MaterialTheme.typography.titleMedium)
-                            Text(task.episode.title, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = {
-                                    if (task.totalPages <= 0) 0f
-                                    else task.completedPages.toFloat() / task.totalPages
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                when (task.status) {
-                                    DownloadStatus.RUNNING, DownloadStatus.QUEUED ->
-                                        TextButton(onClick = { scope.launch { coordinator.pause(task.id) } }) {
-                                            Text(stringResource(Res.string.pause))
+            Box(Modifier.weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(tasks, key = { it.id }) { task ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(task.comic.title, style = MaterialTheme.typography.titleMedium)
+                                Text(task.episode.title, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = {
+                                        if (task.totalPages <= 0) 0f
+                                        else task.completedPages.toFloat() / task.totalPages
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    when (task.status) {
+                                        DownloadStatus.RUNNING, DownloadStatus.QUEUED ->
+                                            TextButton(onClick = { scope.launch { coordinator.pause(task.id) } }) {
+                                                Text(stringResource(Res.string.pause))
+                                            }
+                                        DownloadStatus.PAUSED, DownloadStatus.FAILED ->
+                                            TextButton(onClick = { scope.launch { coordinator.resume(task.id) } }) {
+                                                Text(stringResource(Res.string.resume))
+                                            }
+                                        else -> Unit
+                                    }
+                                    if (task.status != DownloadStatus.COMPLETED) {
+                                        TextButton(onClick = { scope.launch { coordinator.cancel(task.id) } }) {
+                                            Text(stringResource(Res.string.cancel))
                                         }
-                                    DownloadStatus.PAUSED, DownloadStatus.FAILED ->
-                                        TextButton(onClick = { scope.launch { coordinator.resume(task.id) } }) {
-                                            Text(stringResource(Res.string.resume))
-                                        }
-                                    else -> Unit
-                                }
-                                if (task.status != DownloadStatus.COMPLETED) {
-                                    TextButton(onClick = { scope.launch { coordinator.cancel(task.id) } }) {
-                                        Text(stringResource(Res.string.cancel))
                                     }
                                 }
                             }
                         }
                     }
                 }
+                PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
             }
         }
     }
@@ -537,72 +586,79 @@ private fun DetailScreen(
         },
     ) { padding ->
         LoadStateContent(state, Modifier.padding(padding), onRetry = { refresh++ }) { (comic, episodeItems) ->
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    AsyncImage(
-                        model = comic.coverUrl,
-                        contentDescription = comic.title,
-                        modifier = Modifier.width(180.dp).aspectRatio(0.72f),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(comic.title, style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp))
-                        Text("${stringResource(Res.string.author)}：${comic.author}")
-                        Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
-                        Spacer(Modifier.height(12.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            comic.categories.forEach { FilterChip(false, {}, { Text(it) }) }
-                            comic.tags.take(8).forEach { FilterChip(false, {}, { Text(it) }) }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { scope.launch { repository.toggleFavorite(comic.id) } }) {
-                                Icon(
-                                    if (comic.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                    contentDescription = null,
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(if (comic.isFavorite) Res.string.unfavorite else Res.string.favorite))
+            val scrollState = rememberScrollState()
+            Box(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(scrollState).padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        AsyncImage(
+                            model = comic.coverUrl,
+                            contentDescription = comic.title,
+                            modifier = Modifier.width(180.dp).aspectRatio(0.72f),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(comic.title, style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(8.dp))
+                            Text("${stringResource(Res.string.author)}：${comic.author}")
+                            Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
+                            Spacer(Modifier.height(12.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                comic.categories.forEach { FilterChip(false, {}, { Text(it) }) }
+                                comic.tags.take(8).forEach { FilterChip(false, {}, { Text(it) }) }
                             }
-                            OutlinedButton(onClick = { scope.launch { repository.like(comic.id) } }) {
-                                Icon(Icons.Rounded.ThumbUp, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.like))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { scope.launch { repository.toggleFavorite(comic.id) } }) {
+                                    Icon(
+                                        if (comic.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                        contentDescription = null,
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(if (comic.isFavorite) Res.string.unfavorite else Res.string.favorite))
+                                }
+                                OutlinedButton(onClick = { scope.launch { repository.like(comic.id) } }) {
+                                    Icon(Icons.Rounded.ThumbUp, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.like))
+                                }
                             }
                         }
                     }
-                }
-                Text(comic.description.ifBlank { stringResource(Res.string.no_description) })
-                SectionTitle(stringResource(Res.string.episodes))
-                episodeItems.forEach { episode ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(episode.title, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { onRead(episode.id) }) {
-                                Text(stringResource(Res.string.read))
-                            }
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        downloads.enqueue(
-                                            comic = comic.toSummary(),
-                                            episode = episode,
-                                            targetLocation = platformServices.fileLocationProvider.defaultDownloadLocation(),
-                                        )
-                                    }
-                                },
+                    Text(comic.description.ifBlank { stringResource(Res.string.no_description) })
+                    SectionTitle(stringResource(Res.string.episodes))
+                    episodeItems.forEach { episode ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Icon(Icons.Rounded.Download, contentDescription = stringResource(Res.string.download))
+                                Text(episode.title, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { onRead(episode.id) }) {
+                                    Text(stringResource(Res.string.read))
+                                }
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            downloads.enqueue(
+                                                comic = comic.toSummary(),
+                                                episode = episode,
+                                                targetLocation = platformServices.fileLocationProvider.defaultDownloadLocation(),
+                                            )
+                                        }
+                                    },
+                                ) {
+                                    Icon(Icons.Rounded.Download, contentDescription = stringResource(Res.string.download))
+                                }
                             }
                         }
                     }
                 }
+                PlatformVerticalScrollbar(
+                    scrollState,
+                    Modifier.align(Alignment.CenterEnd),
+                )
             }
         }
     }
@@ -678,45 +734,48 @@ private fun ReaderScreen(
         restoredProgress?.let { mode = it.mode }
     }
 
+    val toolbarScrollState = rememberScrollState()
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         if (controlsVisible) {
-            Row(
-                Modifier.fillMaxWidth()
-                    .background(Color(0xCC202020))
-                    .horizontalScroll(rememberScrollState())
-                    .padding(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.back), tint = Color.White)
-                }
-                Text(stringResource(Res.string.reader_mode), color = Color.White)
-                ReaderModeButton(mode == ReaderMode.VERTICAL, Res.string.reader_vertical) {
-                    mode = ReaderMode.VERTICAL
-                }
-                ReaderModeButton(mode == ReaderMode.PAGED_LEFT_TO_RIGHT, Res.string.reader_ltr) {
-                    mode = ReaderMode.PAGED_LEFT_TO_RIGHT
-                }
-                ReaderModeButton(mode == ReaderMode.PAGED_RIGHT_TO_LEFT, Res.string.reader_rtl) {
-                    mode = ReaderMode.PAGED_RIGHT_TO_LEFT
-                }
-                if (platformServices.isDesktop) {
-                    ReaderModeButton(mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT, Res.string.reader_double_ltr) {
-                        mode = ReaderMode.DOUBLE_LEFT_TO_RIGHT
+            Column(Modifier.fillMaxWidth().background(Color(0xCC202020))) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .horizontalScroll(toolbarScrollState)
+                        .padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.back), tint = Color.White)
                     }
-                    ReaderModeButton(mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, Res.string.reader_double_rtl) {
-                        mode = ReaderMode.DOUBLE_RIGHT_TO_LEFT
+                    Text(stringResource(Res.string.reader_mode), color = Color.White)
+                    ReaderModeButton(mode == ReaderMode.VERTICAL, Res.string.reader_vertical) {
+                        mode = ReaderMode.VERTICAL
+                    }
+                    ReaderModeButton(mode == ReaderMode.PAGED_LEFT_TO_RIGHT, Res.string.reader_ltr) {
+                        mode = ReaderMode.PAGED_LEFT_TO_RIGHT
+                    }
+                    ReaderModeButton(mode == ReaderMode.PAGED_RIGHT_TO_LEFT, Res.string.reader_rtl) {
+                        mode = ReaderMode.PAGED_RIGHT_TO_LEFT
+                    }
+                    if (platformServices.isDesktop) {
+                        ReaderModeButton(mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT, Res.string.reader_double_ltr) {
+                            mode = ReaderMode.DOUBLE_LEFT_TO_RIGHT
+                        }
+                        ReaderModeButton(mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, Res.string.reader_double_rtl) {
+                            mode = ReaderMode.DOUBLE_RIGHT_TO_LEFT
+                        }
+                    }
+                    ReaderModeButton(fit == PageFit.WIDTH, Res.string.fit_width) {
+                        fit = PageFit.WIDTH
+                    }
+                    ReaderModeButton(fit == PageFit.HEIGHT, Res.string.fit_height) {
+                        fit = PageFit.HEIGHT
+                    }
+                    IconButton(onClick = { controlsVisible = false }) {
+                        Icon(Icons.Rounded.Fullscreen, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
                     }
                 }
-                ReaderModeButton(fit == PageFit.WIDTH, Res.string.fit_width) {
-                    fit = PageFit.WIDTH
-                }
-                ReaderModeButton(fit == PageFit.HEIGHT, Res.string.fit_height) {
-                    fit = PageFit.HEIGHT
-                }
-                IconButton(onClick = { controlsVisible = false }) {
-                    Icon(Icons.Rounded.Fullscreen, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
-                }
+                PlatformHorizontalScrollbar(toolbarScrollState)
             }
         }
         Box(Modifier.weight(1f)) {
@@ -768,10 +827,13 @@ private fun VerticalReader(
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect(onPageChanged)
     }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-        items(pages, key = { it.index }) { page ->
-            ZoomablePage(page, Modifier.fillMaxWidth().heightIn(min = 480.dp), fit)
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            items(pages, key = { it.index }) { page ->
+                ZoomablePage(page, Modifier.fillMaxWidth().heightIn(min = 480.dp), fit)
+            }
         }
+        PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
     }
 }
 
@@ -864,10 +926,13 @@ private fun SettingsScreen(
         mutableStateOf(settingsValue.network.proxyPort.takeIf { it > 0 }?.toString().orEmpty())
     }
     var exportLocation by remember { mutableStateOf<String?>(null) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    val settingsScrollState = rememberScrollState()
+    val proxyModeScrollState = rememberScrollState()
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(settingsScrollState).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         SectionTitle(stringResource(Res.string.settings))
         SettingCard(stringResource(Res.string.theme)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -886,29 +951,32 @@ private fun SettingsScreen(
             }
         }
         SettingCard(stringResource(Res.string.network)) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ProxyMode.entries.forEach { mode ->
-                    val label = when (mode) {
-                        ProxyMode.DIRECT -> Res.string.proxy_direct
-                        ProxyMode.SYSTEM -> Res.string.proxy_system
-                        ProxyMode.HTTP -> Res.string.proxy_http
-                        ProxyMode.SOCKS5 -> Res.string.proxy_socks5
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(proxyModeScrollState),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ProxyMode.entries.forEach { mode ->
+                        val label = when (mode) {
+                            ProxyMode.DIRECT -> Res.string.proxy_direct
+                            ProxyMode.SYSTEM -> Res.string.proxy_system
+                            ProxyMode.HTTP -> Res.string.proxy_http
+                            ProxyMode.SOCKS5 -> Res.string.proxy_socks5
+                        }
+                        FilterChip(
+                            selected = settingsValue.network.proxyMode == mode,
+                            onClick = {
+                                scope.launch {
+                                    library.updateSettings(
+                                        settingsValue.copy(network = settingsValue.network.copy(proxyMode = mode)),
+                                    )
+                                }
+                            },
+                            label = { Text(stringResource(label)) },
+                        )
                     }
-                    FilterChip(
-                        selected = settingsValue.network.proxyMode == mode,
-                        onClick = {
-                            scope.launch {
-                                library.updateSettings(
-                                    settingsValue.copy(network = settingsValue.network.copy(proxyMode = mode)),
-                                )
-                            }
-                        },
-                        label = { Text(stringResource(label)) },
-                    )
                 }
+                PlatformHorizontalScrollbar(proxyModeScrollState)
             }
             if (settingsValue.network.proxyMode in setOf(ProxyMode.HTTP, ProxyMode.SOCKS5)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -975,6 +1043,8 @@ private fun SettingsScreen(
         OutlinedButton(onClick = onLogout) {
             Text(stringResource(Res.string.logout))
         }
+        }
+        PlatformVerticalScrollbar(settingsScrollState, Modifier.align(Alignment.CenterEnd))
     }
 }
 
