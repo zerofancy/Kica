@@ -1,36 +1,7 @@
 package top.ntutn.kica.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,7 +11,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
+import io.github.composefluent.FluentTheme
+import io.github.composefluent.background.Mica
+import io.github.composefluent.component.Icon
+import io.github.composefluent.component.NavigationDisplayMode
+import io.github.composefluent.component.NavigationView
+import io.github.composefluent.component.Text
+import io.github.composefluent.component.menuItem
+import io.github.composefluent.component.rememberNavigationState
+import io.github.composefluent.icons.Icons
+import io.github.composefluent.icons.regular.ArrowDownload
+import io.github.composefluent.icons.regular.Heart
+import io.github.composefluent.icons.regular.History
+import io.github.composefluent.icons.regular.Home
+import io.github.composefluent.icons.regular.Navigation
+import io.github.composefluent.icons.regular.Settings
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -66,12 +51,12 @@ private data class RootDestination(
 )
 
 private val rootDestinations = listOf(
-    RootDestination(AppRoute.Home, Res.string.home, Icons.Rounded.Home),
-    RootDestination(AppRoute.Discover, Res.string.discover, Icons.Rounded.Explore),
-    RootDestination(AppRoute.Favorites, Res.string.favorites, Icons.Rounded.Favorite),
-    RootDestination(AppRoute.History, Res.string.history, Icons.Rounded.History),
-    RootDestination(AppRoute.Downloads, Res.string.downloads, Icons.Rounded.Download),
-    RootDestination(AppRoute.Settings, Res.string.settings, Icons.Rounded.Settings),
+    RootDestination(AppRoute.Home, Res.string.home, Icons.Regular.Home),
+    RootDestination(AppRoute.Discover, Res.string.discover, Icons.Regular.Navigation),
+    RootDestination(AppRoute.Favorites, Res.string.favorites, Icons.Regular.Heart),
+    RootDestination(AppRoute.History, Res.string.history, Icons.Regular.History),
+    RootDestination(AppRoute.Downloads, Res.string.downloads, Icons.Regular.ArrowDownload),
+    RootDestination(AppRoute.Settings, Res.string.settings, Icons.Regular.Settings),
 )
 
 @Composable
@@ -96,10 +81,7 @@ fun KicaApp(
 
     KicaFluentTheme(settings.theme) {
         val loginFailed = stringResource(Res.string.login_failed)
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
+        Mica(Modifier.fillMaxSize()) {
             if (session == null) {
                 LoginScreen(
                     onLogin = { email, password, onResult ->
@@ -160,82 +142,48 @@ private fun MainShell(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val layout = classifyWindow(maxWidth.value.toInt())
-        if (layout == WindowLayout.PHONE) {
-            val drawerState = rememberDrawerState(DrawerValue.Closed)
-            val scope = rememberCoroutineScope()
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet {
-                        Text(
-                            "Kica",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(20.dp),
-                        )
-                        rootDestinations.forEach { destination ->
-                            NavigationDrawerItem(
-                                selected = route == destination.route,
-                                onClick = {
-                                    onNavigate(destination.route)
-                                    scope.launch { drawerState.close() }
-                                },
-                                icon = { Icon(destination.icon, contentDescription = null) },
-                                label = { Text(stringResource(destination.label)) },
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                            )
-                        }
-                    }
-                },
-            ) {
-                Scaffold(
-                    topBar = {
-                        Row {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Rounded.Menu, contentDescription = null)
-                            }
-                        }
-                    },
-                    bottomBar = {
-                        NavigationBar {
-                            rootDestinations.take(5).forEach { destination ->
-                                NavigationBarItem(
-                                    selected = route == destination.route,
-                                    onClick = { onNavigate(destination.route) },
-                                    icon = { Icon(destination.icon, contentDescription = null) },
-                                    label = { Text(stringResource(destination.label)) },
-                                )
-                            }
-                        }
-                    },
-                ) { padding ->
-                    Column(Modifier.fillMaxSize().padding(padding)) {
-                        content()
-                    }
-                }
-            }
-        } else {
-            Row(Modifier.fillMaxSize()) {
-                NavigationRail(
-                    modifier = if (layout == WindowLayout.DESKTOP) Modifier.width(220.dp) else Modifier,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    rootDestinations.forEach { destination ->
-                        NavigationRailItem(
-                            selected = route == destination.route,
-                            onClick = { onNavigate(destination.route) },
-                            icon = { Icon(destination.icon, contentDescription = null) },
-                            label = if (layout == WindowLayout.DESKTOP) {
-                                { Text(stringResource(destination.label)) }
-                            } else {
-                                null
-                            },
-                        )
-                    }
-                }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    content()
-                }
-            }
+        val displayMode = when (layout) {
+            WindowLayout.PHONE -> NavigationDisplayMode.LeftCollapsed
+            WindowLayout.TABLET -> NavigationDisplayMode.LeftCompact
+            WindowLayout.DESKTOP -> NavigationDisplayMode.Left
         }
+        val navigationState = rememberNavigationState(
+            initialExpanded = layout == WindowLayout.DESKTOP,
+        )
+
+        NavigationView(
+            modifier = Modifier.fillMaxSize(),
+            displayMode = displayMode,
+            state = navigationState,
+            title = {
+                Text(
+                    text = "Kica",
+                    style = FluentTheme.typography.subtitle,
+                )
+            },
+            menuItems = {
+                rootDestinations.dropLast(1).forEach { destination ->
+                    menuItem(
+                        selected = route == destination.route,
+                        onClick = { onNavigate(destination.route) },
+                        text = { Text(stringResource(destination.label)) },
+                        icon = { Icon(destination.icon, contentDescription = null) },
+                        key = destination.route,
+                    )
+                }
+            },
+            footerItems = {
+                rootDestinations.lastOrNull()?.let { destination ->
+                    menuItem(
+                        selected = route == destination.route,
+                        onClick = { onNavigate(destination.route) },
+                        text = { Text(stringResource(destination.label)) },
+                        icon = { Icon(destination.icon, contentDescription = null) },
+                        key = destination.route,
+                    )
+                }
+            },
+            pane = content,
+        )
     }
 }

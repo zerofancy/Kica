@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.composefluent.FluentTheme
 
 @Composable
 internal actual fun PlatformHorizontalScrollbar(state: LazyListState, modifier: Modifier) {
@@ -90,6 +90,6 @@ internal actual fun PlatformVerticalScrollbar(state: ScrollState, modifier: Modi
 
 @Composable
 private fun themedScrollbarStyle(): ScrollbarStyle = LocalScrollbarStyle.current.copy(
-    unhoverColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-    hoverColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+    unhoverColor = FluentTheme.colors.controlStrong.default.copy(alpha = 0.45f),
+    hoverColor = FluentTheme.colors.controlStrong.default,
 )

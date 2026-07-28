@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicDetail
+import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.DownloadTask
 import top.ntutn.kica.model.Episode
@@ -23,7 +24,7 @@ interface PicaRepository {
     suspend fun logout()
     suspend fun recommendations(): List<ComicSummary>
     suspend fun randomComics(): List<ComicSummary>
-    suspend fun categories(): List<String>
+    suspend fun categories(): List<ComicCategory>
     suspend fun ranking(period: RankPeriod): List<ComicSummary>
     suspend fun search(keyword: String, categories: List<String> = emptyList(), page: Int = 1): List<ComicSummary>
     suspend fun favorites(page: Int = 1): List<ComicSummary>

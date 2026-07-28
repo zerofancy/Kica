@@ -1,7 +1,6 @@
 package top.ntutn.kica.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,13 +17,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BrokenImage
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +25,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import io.github.composefluent.FluentTheme
+import io.github.composefluent.component.Icon
+import io.github.composefluent.component.Text
+import io.github.composefluent.icons.Icons
+import io.github.composefluent.icons.regular.Image
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
@@ -52,7 +49,7 @@ fun <T> LoadStateContent(
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
             LoadState.Idle, LoadState.Loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
+                FluentProgressRing()
                 Spacer(Modifier.height(12.dp))
                 Text(stringResource(Res.string.loading))
             }
@@ -63,10 +60,10 @@ fun <T> LoadStateContent(
                     Text(
                         text = stringResource(Res.string.offline_message),
                         modifier = Modifier.align(Alignment.TopCenter)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer)
+                            .background(FluentTheme.colors.system.neutralBackground)
                             .padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        style = MaterialTheme.typography.labelMedium,
+                        color = FluentTheme.colors.text.text.primary,
+                        style = FluentTheme.typography.caption,
                     )
                 }
             }
@@ -76,14 +73,14 @@ fun <T> LoadStateContent(
 
 @Composable
 fun ErrorCard(message: String, onRetry: () -> Unit) {
-    Card(
-        modifier = Modifier.padding(24.dp).clickable(onClick = onRetry),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    FluentCard(
+        modifier = Modifier.padding(24.dp),
+        onClick = onRetry,
     ) {
         Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(message, color = FluentTheme.colors.system.critical)
             Spacer(Modifier.height(6.dp))
-            Text(stringResource(Res.string.tap_to_retry), style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(Res.string.tap_to_retry), style = FluentTheme.typography.bodyStrong)
         }
     }
 }
@@ -91,7 +88,7 @@ fun ErrorCard(message: String, onRetry: () -> Unit) {
 @Composable
 fun EmptyContent(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(stringResource(Res.string.empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(Res.string.empty), color = FluentTheme.colors.text.text.secondary)
     }
 }
 
@@ -124,22 +121,22 @@ fun ComicGrid(
 
 @Composable
 fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick(comic) },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    FluentCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onClick(comic) },
     ) {
         Column {
             Box(
                 modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    .background(FluentTheme.colors.control.secondary),
                 contentAlignment = Alignment.Center,
             ) {
                 if (comic.coverUrl.isBlank()) {
-                    androidx.compose.material3.Icon(
-                        Icons.Rounded.BrokenImage,
+                    Icon(
+                        Icons.Regular.Image,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = FluentTheme.colors.text.text.secondary,
                     )
                 } else {
                     AsyncImage(
@@ -155,7 +152,7 @@ fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
                     comic.title,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = FluentTheme.typography.bodyStrong,
                 )
                 if (comic.author.isNotBlank()) {
                     Spacer(Modifier.height(3.dp))
@@ -163,8 +160,8 @@ fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
                         comic.author,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = FluentTheme.typography.caption,
+                        color = FluentTheme.colors.text.text.secondary,
                     )
                 }
             }
@@ -178,7 +175,7 @@ fun SectionTitle(title: String, action: (@Composable () -> Unit)? = null) {
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, style = FluentTheme.typography.subtitle)
         Spacer(Modifier.weight(1f))
         action?.invoke()
     }

@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import top.ntutn.kica.data.CredentialStore
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.model.ComicDetail
+import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.Episode
 import top.ntutn.kica.model.NetworkSettings
@@ -77,9 +78,18 @@ class RealPicaRepository(
     override suspend fun randomComics(): List<ComicSummary> =
         service.random().requireSuccess().data.array("comics").mapNotNull(JsonElement::comicSummary)
 
-    override suspend fun categories(): List<String> =
+    override suspend fun categories(): List<ComicCategory> =
         service.categories().requireSuccess().data.array("categories").mapNotNull { element ->
-            element.obj()?.string("title") ?: element.primitiveString()
+            val item = element.obj()
+            val title = item?.string("title") ?: element.primitiveString()
+            title?.let {
+                ComicCategory(
+                    id = item?.string("_id").orEmpty(),
+                    title = it,
+                    description = item?.string("description").orEmpty(),
+                    coverUrl = item?.obj("thumb").imageUrl(),
+                )
+            }
         }
 
     override suspend fun ranking(period: RankPeriod): List<ComicSummary> {

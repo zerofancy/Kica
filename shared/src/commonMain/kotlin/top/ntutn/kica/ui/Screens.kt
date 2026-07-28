@@ -2,13 +2,13 @@ package top.ntutn.kica.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -22,35 +22,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.material.icons.rounded.FullscreenExit
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.ThumbUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,6 +48,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -73,6 +56,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import io.github.composefluent.FluentTheme
+import io.github.composefluent.component.Icon
+import io.github.composefluent.component.Text
+import io.github.composefluent.icons.Icons
+import io.github.composefluent.icons.filled.Heart as FilledHeart
+import io.github.composefluent.icons.regular.ArrowDownload
+import io.github.composefluent.icons.regular.ArrowExpand
+import io.github.composefluent.icons.regular.ArrowLeft
+import io.github.composefluent.icons.regular.Heart
+import io.github.composefluent.icons.regular.Maximize
+import io.github.composefluent.icons.regular.Search
+import io.github.composefluent.icons.regular.Star
+import io.github.composefluent.icons.regular.Tag
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -83,6 +79,7 @@ import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.ComicDetail
+import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.DownloadStatus
 import top.ntutn.kica.model.HistoryEntry
@@ -175,13 +172,10 @@ fun LoginScreen(
     val enterCredentials = stringResource(Res.string.enter_credentials)
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(
-            modifier = Modifier.width(400.dp).padding(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        ) {
+        FluentCard(modifier = Modifier.width(400.dp).padding(20.dp)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(stringResource(Res.string.login_title), style = MaterialTheme.typography.headlineSmall)
-                OutlinedTextField(
+                Text(stringResource(Res.string.login_title), style = FluentTheme.typography.title)
+                FluentTextField(
                     value = emailValue,
                     onValueChange = { emailValue = it },
                     label = { Text(stringResource(Res.string.email)) },
@@ -189,7 +183,7 @@ fun LoginScreen(
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                FluentTextField(
                     value = passwordValue,
                     onValueChange = { passwordValue = it },
                     label = { Text(stringResource(Res.string.password)) },
@@ -198,8 +192,8 @@ fun LoginScreen(
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Button(
+                error?.let { Text(it, color = FluentTheme.colors.system.critical) }
+                FluentPrimaryButton(
                     onClick = {
                         if (emailValue.isBlank() || passwordValue.isBlank()) {
                             error = enterCredentials
@@ -216,7 +210,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (busy) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        FluentProgressRing(Modifier.size(18.dp), size = 18.dp)
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(stringResource(if (busy) Res.string.logging_in else Res.string.login))
@@ -244,7 +238,14 @@ fun RouteContent(
         AppRoute.History -> HistoryScreen(libraryRepository) { onNavigate(AppRoute.Detail(it.comic.id)) }
         AppRoute.Downloads -> DownloadsScreen(downloadCoordinator)
         AppRoute.Settings -> SettingsScreen(libraryRepository, platformServices, onLogout)
-        AppRoute.Search -> SearchScreen(picaRepository, onBack) { onNavigate(AppRoute.Detail(it.id)) }
+        is AppRoute.Search -> SearchScreen(
+            repository = picaRepository,
+            initialQuery = route.initialQuery,
+            initialCategory = route.category,
+            onBack = onBack,
+        ) {
+            onNavigate(AppRoute.Detail(it.id))
+        }
         is AppRoute.Detail -> DetailScreen(
             comicId = route.comicId,
             repository = picaRepository,
@@ -276,19 +277,45 @@ private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) 
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
     LoadStateContent(state, onRetry = { refresh++ }) { (recommendedItems, randomItems) ->
-        val listState = rememberLazyListState()
+        val gridState = rememberLazyGridState()
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(150.dp),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { SectionTitle(stringResource(Res.string.recommended)) }
-                item { HorizontalComicRow(recommendedItems, onComicClick) }
-                item { SectionTitle(stringResource(Res.string.random_comics)) }
-                item { HorizontalComicRow(randomItems, onComicClick) }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SectionTitle(stringResource(Res.string.recommended))
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HorizontalComicRow(recommendedItems, onComicClick)
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(Modifier.height(6.dp))
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SectionTitle(stringResource(Res.string.random_comics))
+                }
+                if (randomItems.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            stringResource(Res.string.empty),
+                            color = FluentTheme.colors.text.text.secondary,
+                        )
+                    }
+                } else {
+                    gridItems(
+                        items = randomItems,
+                        key = { "random:${it.id}" },
+                    ) { comic ->
+                        ComicCard(comic, onComicClick)
+                    }
+                }
             }
-            PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
+            PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
         }
     }
 }
@@ -296,7 +323,7 @@ private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) 
 @Composable
 private fun HorizontalComicRow(comics: List<ComicSummary>, onComicClick: (ComicSummary) -> Unit) {
     if (comics.isEmpty()) {
-        Text(stringResource(Res.string.empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(Res.string.empty), color = FluentTheme.colors.text.text.secondary)
         return
     }
     val listState = rememberLazyListState()
@@ -319,7 +346,7 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
     var selected by remember { mutableStateOf(RankPeriod.HOURS_24) }
     var refresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
-    val categoriesState by produceState<LoadState<List<String>>>(LoadState.Loading, refresh) {
+    val categoriesState by produceState<LoadState<List<ComicCategory>>>(LoadState.Loading, refresh) {
         value = runCatching { repository.categories() }
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
@@ -327,88 +354,234 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
         value = runCatching { repository.ranking(selected) }
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
-    val categoriesListState = rememberLazyListState()
-    val rankPeriodsListState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
 
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        SectionTitle(stringResource(Res.string.discover)) {
-            IconButton(onClick = { onNavigate(AppRoute.Search) }) {
-                Icon(Icons.Rounded.Search, contentDescription = stringResource(Res.string.search))
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(150.dp),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SectionTitle(stringResource(Res.string.discover)) {
+                    FluentIconButton(onClick = { onNavigate(AppRoute.Search()) }) {
+                        Icon(Icons.Regular.Search, contentDescription = stringResource(Res.string.search))
+                    }
+                }
             }
-        }
-        Text(stringResource(Res.string.categories), style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        when (val categoryValue = categoriesState) {
-            is LoadState.Data -> Column(Modifier.fillMaxWidth()) {
-                LazyRow(
-                    state = categoriesListState,
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(stringResource(Res.string.categories), style = FluentTheme.typography.subtitle)
+            }
+            when (val categoryValue = categoriesState) {
+                is LoadState.Data -> {
+                    if (categoryValue.value.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                stringResource(Res.string.empty),
+                                color = FluentTheme.colors.text.text.secondary,
+                            )
+                        }
+                    } else {
+                        gridItems(
+                            items = categoryValue.value,
+                            key = { "category:${it.id.ifBlank { it.title }}" },
+                        ) { category ->
+                            CategoryCoverCard(
+                                category = category,
+                                onClick = { onNavigate(AppRoute.Search(category = category.title)) },
+                            )
+                        }
+                    }
+                }
+                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(categoryValue.message) { refresh++ }
+                }
+                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    FluentProgressBar(Modifier.fillMaxWidth())
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(Modifier.height(8.dp))
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(stringResource(Res.string.ranking), style = FluentTheme.typography.subtitle)
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(categoryValue.value) { category ->
-                        FilterChip(
-                            selected = false,
-                            onClick = { onNavigate(AppRoute.Search) },
-                            label = { Text(category) },
+                    RankPeriod.entries.forEach { period ->
+                        val label = when (period) {
+                            RankPeriod.HOURS_24 -> Res.string.rank_24h
+                            RankPeriod.DAYS_7 -> Res.string.rank_7d
+                            RankPeriod.DAYS_30 -> Res.string.rank_30d
+                            RankPeriod.KNIGHT -> Res.string.rank_knight
+                        }
+                        FluentChip(
+                            selected = selected == period,
+                            onClick = { selected = period },
+                            label = { Text(stringResource(label)) },
                         )
                     }
                 }
-                PlatformHorizontalScrollbar(categoriesListState)
             }
-            is LoadState.Error -> Text(categoryValue.message, color = MaterialTheme.colorScheme.error)
-            else -> LinearProgressIndicator(Modifier.fillMaxWidth())
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(stringResource(Res.string.ranking), style = MaterialTheme.typography.titleMedium)
-        Column(Modifier.fillMaxWidth()) {
-            LazyRow(
-                state = rankPeriodsListState,
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(RankPeriod.entries) { period ->
-                    val label = when (period) {
-                        RankPeriod.HOURS_24 -> Res.string.rank_24h
-                        RankPeriod.DAYS_7 -> Res.string.rank_7d
-                        RankPeriod.DAYS_30 -> Res.string.rank_30d
-                        RankPeriod.KNIGHT -> Res.string.rank_knight
+            when (val rankingValue = rankingState) {
+                is LoadState.Data -> {
+                    if (rankingValue.value.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                stringResource(Res.string.empty),
+                                color = FluentTheme.colors.text.text.secondary,
+                            )
+                        }
+                    } else {
+                        gridItems(rankingValue.value, key = { "ranking:${it.id}" }) { comic ->
+                            ComicCard(comic) { onNavigate(AppRoute.Detail(it.id)) }
+                        }
                     }
-                    FilterChip(
-                        selected = selected == period,
-                        onClick = { selected = period },
-                        label = { Text(stringResource(label)) },
-                    )
+                }
+                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(rankingValue.message) { refresh++ }
+                }
+                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    FluentProgressBar(Modifier.fillMaxWidth())
                 }
             }
-            PlatformHorizontalScrollbar(rankPeriodsListState)
         }
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.weight(1f)) {
-            LoadStateContent(rankingState, onRetry = { refresh++ }) {
-                ComicGrid(it, { comic -> onNavigate(AppRoute.Detail(comic.id)) })
+        PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
+    }
+}
+
+@Composable
+private fun CategoryCoverCard(
+    category: ComicCategory,
+    onClick: () -> Unit,
+) {
+    val paletteIndex = category.title.hashCode().and(Int.MAX_VALUE) % categoryCoverPalettes.size
+    val palette = categoryCoverPalettes[paletteIndex]
+    var imageFailed by remember(category.coverUrl) { mutableStateOf(false) }
+    FluentCard(
+        modifier = Modifier.fillMaxWidth().aspectRatio(1.45f),
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .background(Brush.linearGradient(palette))
+        ) {
+            if (category.coverUrl.isNotBlank() && !imageFailed) {
+                AsyncImage(
+                    model = category.coverUrl,
+                    contentDescription = category.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onError = { imageFailed = true },
+                )
+            }
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.78f),
+                        ),
+                    ),
+                ),
+            )
+            Box(
+                modifier = Modifier.padding(14.dp).size(34.dp)
+                    .background(Color.White.copy(alpha = 0.18f), FluentTheme.shapes.control),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Regular.Tag,
+                    contentDescription = null,
+                    tint = Color.White,
+                )
+            }
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).padding(14.dp),
+            ) {
+                Text(
+                    text = category.title,
+                    color = Color.White,
+                    style = FluentTheme.typography.bodyStrong,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (category.description.isNotBlank()) {
+                    Text(
+                        text = category.description,
+                        color = Color.White.copy(alpha = 0.82f),
+                        style = FluentTheme.typography.caption,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
 
+private val categoryCoverPalettes = listOf(
+    listOf(Color(0xFF005FB8), Color(0xFF4F9CF9)),
+    listOf(Color(0xFF6B4AA5), Color(0xFFB37FEB)),
+    listOf(Color(0xFF0F7B6C), Color(0xFF4DB6AC)),
+    listOf(Color(0xFF9D5D00), Color(0xFFEAA300)),
+    listOf(Color(0xFFB1464A), Color(0xFFFF7A85)),
+    listOf(Color(0xFF3A6073), Color(0xFF68A0B0)),
+)
+
 @Composable
 private fun SearchScreen(
     repository: PicaRepository,
+    initialQuery: String,
+    initialCategory: String?,
     onBack: () -> Unit,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf("") }
-    var state by remember { mutableStateOf<LoadState<List<ComicSummary>>>(LoadState.Idle) }
+    var query by remember(initialQuery, initialCategory) { mutableStateOf(initialQuery) }
+    var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
+    var criteria by remember(initialQuery, initialCategory) {
+        mutableStateOf(
+            SearchCriteria(initialQuery.trim(), initialCategory)
+                .takeIf { it.keyword.isNotEmpty() || it.category != null },
+        )
+    }
+    var refresh by remember { mutableIntStateOf(0) }
     val searchFailed = stringResource(Res.string.search_failed)
-    val scope = rememberCoroutineScope()
+    val state by produceState<LoadState<List<ComicSummary>>>(
+        initialValue = if (criteria == null) LoadState.Idle else LoadState.Loading,
+        key1 = criteria,
+        key2 = refresh,
+    ) {
+        val current = criteria
+        if (current == null) {
+            value = LoadState.Idle
+        } else {
+            value = LoadState.Loading
+            value = runCatching {
+                repository.search(
+                    keyword = current.keyword,
+                    categories = current.category?.let(::listOf).orEmpty(),
+                )
+            }.fold(
+                onSuccess = { LoadState.Data(it) },
+                onFailure = { LoadState.Error(it.message ?: searchFailed) },
+            )
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.back))
+            FluentIconButton(onClick = onBack) {
+                Icon(Icons.Regular.ArrowLeft, contentDescription = stringResource(Res.string.back))
             }
-            OutlinedTextField(
+            FluentTextField(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text(stringResource(Res.string.search_hint)) },
@@ -416,28 +589,55 @@ private fun SearchScreen(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
-            Button(
+            FluentPrimaryButton(
                 onClick = {
-                    submitted = query.trim()
-                    if (submitted.isNotEmpty()) {
-                        state = LoadState.Loading
-                        scope.launch {
-                            state = runCatching { repository.search(submitted) }
-                                .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: searchFailed) })
-                        }
+                    val keyword = query.trim()
+                    if (keyword.isNotEmpty() || selectedCategory != null) {
+                        criteria = SearchCriteria(keyword, selectedCategory)
                     }
                 },
             ) { Text(stringResource(Res.string.search)) }
         }
+        selectedCategory?.let { category ->
+            Spacer(Modifier.height(10.dp))
+            FluentChip(
+                selected = true,
+                onClick = {
+                    selectedCategory = null
+                    criteria = query.trim()
+                        .takeIf(String::isNotEmpty)
+                        ?.let { SearchCriteria(keyword = it, category = null) }
+                },
+                label = { Text("${stringResource(Res.string.categories)}：$category") },
+            )
+        }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (val value = state) {
-                LoadState.Idle -> EmptyContent()
-                else -> LoadStateContent(value) { ComicGrid(it, onComicClick) }
+                LoadState.Idle -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.search_hint),
+                        color = FluentTheme.colors.text.text.secondary,
+                    )
+                }
+                else -> LoadStateContent(
+                    state = value,
+                    onRetry = { refresh++ },
+                ) {
+                    ComicGrid(it, onComicClick)
+                }
             }
         }
     }
 }
+
+private data class SearchCriteria(
+    val keyword: String,
+    val category: String?,
+)
 
 @Composable
 private fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSummary) -> Unit) {
@@ -471,7 +671,10 @@ private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) ->
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(historyItems, key = { it.comic.id }) { entry ->
-                        Card(Modifier.fillMaxWidth().clickable { onClick(entry) }) {
+                        FluentCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onClick(entry) },
+                        ) {
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 AsyncImage(
                                     model = entry.comic.coverUrl,
@@ -481,10 +684,10 @@ private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) ->
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column {
-                                    Text(entry.comic.title, style = MaterialTheme.typography.titleMedium)
+                                    Text(entry.comic.title, style = FluentTheme.typography.bodyStrong)
                                     Text(
                                         "${entry.episodeTitle} · ${entry.pageIndex + 1}",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = FluentTheme.colors.text.text.secondary,
                                     )
                                 }
                             }
@@ -514,32 +717,30 @@ private fun DownloadsScreen(coordinator: DownloadCoordinator) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(tasks, key = { it.id }) { task ->
-                        Card(Modifier.fillMaxWidth()) {
+                        FluentCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
-                                Text(task.comic.title, style = MaterialTheme.typography.titleMedium)
-                                Text(task.episode.title, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(task.comic.title, style = FluentTheme.typography.bodyStrong)
+                                Text(task.episode.title, color = FluentTheme.colors.text.text.secondary)
                                 Spacer(Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = {
-                                        if (task.totalPages <= 0) 0f
-                                        else task.completedPages.toFloat() / task.totalPages
-                                    },
+                                FluentProgressBar(
+                                    progress = if (task.totalPages <= 0) 0f
+                                    else task.completedPages.toFloat() / task.totalPages,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     when (task.status) {
                                         DownloadStatus.RUNNING, DownloadStatus.QUEUED ->
-                                            TextButton(onClick = { scope.launch { coordinator.pause(task.id) } }) {
+                                            FluentTextButton(onClick = { scope.launch { coordinator.pause(task.id) } }) {
                                                 Text(stringResource(Res.string.pause))
                                             }
                                         DownloadStatus.PAUSED, DownloadStatus.FAILED ->
-                                            TextButton(onClick = { scope.launch { coordinator.resume(task.id) } }) {
+                                            FluentTextButton(onClick = { scope.launch { coordinator.resume(task.id) } }) {
                                                 Text(stringResource(Res.string.resume))
                                             }
                                         else -> Unit
                                     }
                                     if (task.status != DownloadStatus.COMPLETED) {
-                                        TextButton(onClick = { scope.launch { coordinator.cancel(task.id) } }) {
+                                        FluentTextButton(onClick = { scope.launch { coordinator.cancel(task.id) } }) {
                                             Text(stringResource(Res.string.cancel))
                                         }
                                     }
@@ -576,11 +777,11 @@ private fun DetailScreen(
     }
     val scope = rememberCoroutineScope()
 
-    Scaffold(
+    FluentScaffold(
         topBar = {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.back))
+                FluentIconButton(onClick = onBack) {
+                    Icon(Icons.Regular.ArrowLeft, contentDescription = stringResource(Res.string.back))
                 }
             }
         },
@@ -600,26 +801,26 @@ private fun DetailScreen(
                             contentScale = ContentScale.Crop,
                         )
                         Column(Modifier.weight(1f)) {
-                            Text(comic.title, style = MaterialTheme.typography.headlineSmall)
+                            Text(comic.title, style = FluentTheme.typography.title)
                             Spacer(Modifier.height(8.dp))
                             Text("${stringResource(Res.string.author)}：${comic.author}")
                             Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
                             Spacer(Modifier.height(12.dp))
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                comic.categories.forEach { FilterChip(false, {}, { Text(it) }) }
-                                comic.tags.take(8).forEach { FilterChip(false, {}, { Text(it) }) }
+                                comic.categories.forEach { FluentChip(false, {}, { Text(it) }) }
+                                comic.tags.take(8).forEach { FluentChip(false, {}, { Text(it) }) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { scope.launch { repository.toggleFavorite(comic.id) } }) {
+                                FluentButton(onClick = { scope.launch { repository.toggleFavorite(comic.id) } }) {
                                     Icon(
-                                        if (comic.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                        if (comic.isFavorite) Icons.Filled.FilledHeart else Icons.Regular.Heart,
                                         contentDescription = null,
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(stringResource(if (comic.isFavorite) Res.string.unfavorite else Res.string.favorite))
                                 }
-                                OutlinedButton(onClick = { scope.launch { repository.like(comic.id) } }) {
-                                    Icon(Icons.Rounded.ThumbUp, contentDescription = null)
+                                FluentButton(onClick = { scope.launch { repository.like(comic.id) } }) {
+                                    Icon(Icons.Regular.Star, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
                                     Text(stringResource(Res.string.like))
                                 }
@@ -629,16 +830,16 @@ private fun DetailScreen(
                     Text(comic.description.ifBlank { stringResource(Res.string.no_description) })
                     SectionTitle(stringResource(Res.string.episodes))
                     episodeItems.forEach { episode ->
-                        Card(Modifier.fillMaxWidth()) {
+                        FluentCard(Modifier.fillMaxWidth()) {
                             Row(
                                 Modifier.fillMaxWidth().padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(episode.title, modifier = Modifier.weight(1f))
-                                IconButton(onClick = { onRead(episode.id) }) {
+                                FluentIconButton(onClick = { onRead(episode.id) }, iconOnly = false) {
                                     Text(stringResource(Res.string.read))
                                 }
-                                IconButton(
+                                FluentIconButton(
                                     onClick = {
                                         scope.launch {
                                             downloads.enqueue(
@@ -649,7 +850,7 @@ private fun DetailScreen(
                                         }
                                     },
                                 ) {
-                                    Icon(Icons.Rounded.Download, contentDescription = stringResource(Res.string.download))
+                                    Icon(Icons.Regular.ArrowDownload, contentDescription = stringResource(Res.string.download))
                                 }
                             }
                         }
@@ -744,8 +945,8 @@ private fun ReaderScreen(
                         .padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.back), tint = Color.White)
+                    FluentIconButton(onClick = onBack) {
+                        Icon(Icons.Regular.ArrowLeft, contentDescription = stringResource(Res.string.back), tint = Color.White)
                     }
                     Text(stringResource(Res.string.reader_mode), color = Color.White)
                     ReaderModeButton(mode == ReaderMode.VERTICAL, Res.string.reader_vertical) {
@@ -771,8 +972,8 @@ private fun ReaderScreen(
                     ReaderModeButton(fit == PageFit.HEIGHT, Res.string.fit_height) {
                         fit = PageFit.HEIGHT
                     }
-                    IconButton(onClick = { controlsVisible = false }) {
-                        Icon(Icons.Rounded.Fullscreen, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
+                    FluentIconButton(onClick = { controlsVisible = false }) {
+                        Icon(Icons.Regular.Maximize, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
                     }
                 }
                 PlatformHorizontalScrollbar(toolbarScrollState)
@@ -781,7 +982,7 @@ private fun ReaderScreen(
         Box(Modifier.weight(1f)) {
             LoadStateContent(pagesState, onRetry = { refresh++ }) { pages ->
                 when {
-                    !progressLoaded -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    !progressLoaded -> FluentProgressRing(Modifier.align(Alignment.Center))
                     pages.isEmpty() -> EmptyContent()
                     mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage)
                     mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT ->
@@ -790,8 +991,8 @@ private fun ReaderScreen(
                 }
             }
             if (!controlsVisible) {
-                IconButton(onClick = { controlsVisible = true }, modifier = Modifier.align(Alignment.TopEnd)) {
-                    Icon(Icons.Rounded.FullscreenExit, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
+                FluentIconButton(onClick = { controlsVisible = true }, modifier = Modifier.align(Alignment.TopEnd)) {
+                    Icon(Icons.Regular.ArrowExpand, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
                 }
             }
         }
@@ -805,7 +1006,7 @@ private enum class PageFit {
 
 @Composable
 private fun ReaderModeButton(selected: Boolean, label: org.jetbrains.compose.resources.StringResource, onClick: () -> Unit) {
-    FilterChip(
+    FluentChip(
         selected = selected,
         onClick = onClick,
         label = { Text(stringResource(label)) },
@@ -942,7 +1143,7 @@ private fun SettingsScreen(
                         ThemePreference.LIGHT -> Res.string.theme_light
                         ThemePreference.DARK -> Res.string.theme_dark
                     }
-                    FilterChip(
+                    FluentChip(
                         selected = settingsValue.theme == preference,
                         onClick = { scope.launch { library.updateSettings(settingsValue.copy(theme = preference)) } },
                         label = { Text(stringResource(label)) },
@@ -963,7 +1164,7 @@ private fun SettingsScreen(
                             ProxyMode.HTTP -> Res.string.proxy_http
                             ProxyMode.SOCKS5 -> Res.string.proxy_socks5
                         }
-                        FilterChip(
+                        FluentChip(
                             selected = settingsValue.network.proxyMode == mode,
                             onClick = {
                                 scope.launch {
@@ -980,7 +1181,7 @@ private fun SettingsScreen(
             }
             if (settingsValue.network.proxyMode in setOf(ProxyMode.HTTP, ProxyMode.SOCKS5)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    FluentTextField(
                         value = proxyHost,
                         onValueChange = { value ->
                             proxyHost = value
@@ -994,7 +1195,7 @@ private fun SettingsScreen(
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
-                    OutlinedTextField(
+                    FluentTextField(
                         value = proxyPort,
                         onValueChange = { value ->
                             if (value.all(Char::isDigit) && value.length <= 5) {
@@ -1020,7 +1221,7 @@ private fun SettingsScreen(
         SettingCard(stringResource(Res.string.download_location)) {
             Text(downloadLocation.ifBlank { platformServices.platformName })
             if (!platformServices.isDesktop) {
-                OutlinedButton(
+                FluentButton(
                     onClick = {
                         scope.launch {
                             exportLocation = platformServices.fileLocationProvider.chooseExportLocation()
@@ -1029,18 +1230,18 @@ private fun SettingsScreen(
                 ) {
                     Text(stringResource(Res.string.choose_export_location))
                 }
-                exportLocation?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                exportLocation?.let { Text(it, style = FluentTheme.typography.caption) }
             }
         }
         SettingCard(stringResource(Res.string.cache)) {
-            OutlinedButton(onClick = { scope.launch { library.clearCache() } }) {
+            FluentButton(onClick = { scope.launch { library.clearCache() } }) {
                 Text(stringResource(Res.string.clear_cache))
             }
         }
         SettingCard(stringResource(Res.string.about)) {
             Text(stringResource(Res.string.about_text))
         }
-        OutlinedButton(onClick = onLogout) {
+        FluentButton(onClick = onLogout) {
             Text(stringResource(Res.string.logout))
         }
         }
@@ -1050,12 +1251,9 @@ private fun SettingsScreen(
 
 @Composable
 private fun SettingCard(title: String, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
+    FluentCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(title, style = FluentTheme.typography.bodyStrong)
             content()
         }
     }

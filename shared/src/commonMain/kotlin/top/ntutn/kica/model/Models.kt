@@ -22,6 +22,14 @@ data class ComicSummary(
 )
 
 @Serializable
+data class ComicCategory(
+    val id: String = "",
+    val title: String,
+    val description: String = "",
+    val coverUrl: String = "",
+)
+
+@Serializable
 data class ComicDetail(
     val id: String,
     val title: String,
@@ -160,8 +168,10 @@ sealed interface AppRoute {
     data object History : AppRoute
     data object Downloads : AppRoute
     data object Settings : AppRoute
-    data object Search : AppRoute
+    data class Search(
+        val initialQuery: String = "",
+        val category: String? = null,
+    ) : AppRoute
     data class Detail(val comicId: String) : AppRoute
     data class Reader(val comicId: String, val episodeId: String) : AppRoute
 }
-
