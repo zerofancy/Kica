@@ -161,6 +161,54 @@ class PicaProtocolTest {
     }
 
     @Test
+    fun repositoryPreservesSearchPaginationMetadata() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setResponseCode(200)
+                    .setHeader("content-type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "code": 200,
+                          "data": {
+                            "comics": {
+                              "page": 2,
+                              "pages": 4,
+                              "docs": [{
+                                "_id": "comic-2",
+                                "title": "Page two",
+                                "thumb": {
+                                  "fileServer": "https://img.example",
+                                  "path": "page-two.jpg"
+                                }
+                              }]
+                            }
+                          }
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+            val repository = RealPicaRepository(
+                credentialStore = SessionCredentialStore(),
+                baseUrl = server.url("/").toString(),
+            )
+
+            val result = repository.search(
+                keyword = "",
+                categories = listOf("Action"),
+                page = 2,
+            )
+
+            assertEquals(2, result.page)
+            assertEquals(4, result.totalPages)
+            assertEquals(listOf("comic-2"), result.items.map { it.id })
+            val request = assertNotNull(server.takeRequest())
+            assertEquals("/comics/advanced-search?page=2", request.path)
+            assertTrue(request.body.readUtf8().contains("\"categories\":[\"Action\"]"))
+        }
+    }
+
+    @Test
     fun repositoryCollectsAndSortsPaginatedEpisodes() = runTest {
         MockWebServer().use { server ->
             server.enqueue(

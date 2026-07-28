@@ -18,6 +18,7 @@ import top.ntutn.kica.data.CredentialStore
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.model.ComicDetail
 import top.ntutn.kica.model.ComicCategory
+import top.ntutn.kica.model.ComicPage
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.Episode
 import top.ntutn.kica.model.NetworkSettings
@@ -109,9 +110,17 @@ class RealPicaRepository(
             .mapNotNull(JsonElement::comicSummary)
     }
 
-    override suspend fun search(keyword: String, categories: List<String>, page: Int): List<ComicSummary> {
+    override suspend fun search(keyword: String, categories: List<String>, page: Int): ComicPage {
         val comics = service.search(page, SearchBody(categories, keyword)).requireSuccess().data.obj("comics")
-        return comics.array("docs").mapNotNull(JsonElement::comicSummary)
+        val items = comics.array("docs").mapNotNull(JsonElement::comicSummary)
+        val currentPage = comics.int("page") ?: page
+        val totalPages = comics.int("pages")
+            ?: if (items.isEmpty()) currentPage else currentPage + 1
+        return ComicPage(
+            items = items,
+            page = currentPage,
+            totalPages = totalPages.coerceAtLeast(currentPage),
+        )
     }
 
     override suspend fun favorites(page: Int): List<ComicSummary> {

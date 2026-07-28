@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +33,7 @@ import io.github.composefluent.component.Icon
 import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.Image
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
@@ -37,6 +41,7 @@ import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.empty
 import top.ntutn.kica.resources.loading
 import top.ntutn.kica.resources.offline_message
+import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.tap_to_retry
 
 @Composable
@@ -97,12 +102,27 @@ fun ComicGrid(
     comics: List<ComicSummary>,
     onComicClick: (ComicSummary) -> Unit,
     modifier: Modifier = Modifier,
+    loadingMore: Boolean = false,
+    canLoadMore: Boolean = false,
+    loadMoreError: String? = null,
+    onLoadMore: () -> Unit = {},
 ) {
     if (comics.isEmpty()) {
         EmptyContent(modifier)
         return
     }
     val gridState = rememberLazyGridState()
+    LaunchedEffect(gridState, comics.size, canLoadMore, loadingMore, loadMoreError) {
+        if (!canLoadMore || loadingMore || loadMoreError != null) return@LaunchedEffect
+        snapshotFlow {
+            val layoutInfo = gridState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val triggerIndex = (layoutInfo.totalItemsCount - 4).coerceAtLeast(0)
+            layoutInfo.totalItemsCount > 0 && lastVisibleIndex >= triggerIndex
+        }.distinctUntilChanged().collect { nearEnd ->
+            if (nearEnd) onLoadMore()
+        }
+    }
     Box(modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
@@ -113,6 +133,28 @@ fun ComicGrid(
         ) {
             items(comics, key = { it.id }) { comic ->
                 ComicCard(comic, onComicClick)
+            }
+            if (loadingMore) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    FluentProgressBar(Modifier.fillMaxWidth().padding(vertical = 12.dp))
+                }
+            } else if (loadMoreError != null) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = loadMoreError,
+                            color = FluentTheme.colors.system.critical,
+                            style = FluentTheme.typography.caption,
+                        )
+                        FluentButton(onClick = onLoadMore) {
+                            Text(stringResource(Res.string.retry))
+                        }
+                    }
+                }
             }
         }
         PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))

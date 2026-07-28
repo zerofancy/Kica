@@ -30,6 +30,13 @@ data class ComicCategory(
 )
 
 @Serializable
+data class ComicPage(
+    val items: List<ComicSummary>,
+    val page: Int,
+    val totalPages: Int,
+)
+
+@Serializable
 data class ComicDetail(
     val id: String,
     val title: String,

@@ -554,25 +554,71 @@ private fun SearchScreen(
     }
     var refresh by remember { mutableIntStateOf(0) }
     val searchFailed = stringResource(Res.string.search_failed)
-    val state by produceState<LoadState<List<ComicSummary>>>(
-        initialValue = if (criteria == null) LoadState.Idle else LoadState.Loading,
-        key1 = criteria,
-        key2 = refresh,
-    ) {
+    var state by remember(initialQuery, initialCategory) {
+        mutableStateOf<LoadState<List<ComicSummary>>>(
+            if (criteria == null) LoadState.Idle else LoadState.Loading,
+        )
+    }
+    var loadedPage by remember { mutableIntStateOf(0) }
+    var totalPages by remember { mutableIntStateOf(0) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var loadMoreError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(criteria, refresh) {
         val current = criteria
+        loadedPage = 0
+        totalPages = 0
+        loadingMore = false
+        loadMoreError = null
         if (current == null) {
-            value = LoadState.Idle
+            state = LoadState.Idle
         } else {
-            value = LoadState.Loading
-            value = runCatching {
+            state = LoadState.Loading
+            state = runCatching {
                 repository.search(
                     keyword = current.keyword,
                     categories = current.category?.let(::listOf).orEmpty(),
+                    page = 1,
                 )
             }.fold(
-                onSuccess = { LoadState.Data(it) },
+                onSuccess = { result ->
+                    loadedPage = result.page
+                    totalPages = result.totalPages
+                    LoadState.Data(result.items)
+                },
                 onFailure = { LoadState.Error(it.message ?: searchFailed) },
             )
+        }
+    }
+    val canLoadMore = state is LoadState.Data && loadedPage < totalPages
+    val requestLoadMore: () -> Unit = request@{
+        val current = criteria ?: return@request
+        if (!canLoadMore || loadingMore) return@request
+        val nextPage = loadedPage + 1
+        loadingMore = true
+        loadMoreError = null
+        scope.launch {
+            val result = runCatching {
+                repository.search(
+                    keyword = current.keyword,
+                    categories = current.category?.let(::listOf).orEmpty(),
+                    page = nextPage,
+                )
+            }
+            if (criteria != current) return@launch
+            result.fold(
+                onSuccess = { page ->
+                    val existing = (state as? LoadState.Data)?.value.orEmpty()
+                    state = LoadState.Data((existing + page.items).distinctBy(ComicSummary::id))
+                    loadedPage = maxOf(nextPage, page.page)
+                    totalPages = page.totalPages
+                },
+                onFailure = {
+                    loadMoreError = it.message ?: searchFailed
+                },
+            )
+            loadingMore = false
         }
     }
 
@@ -593,7 +639,8 @@ private fun SearchScreen(
                 onClick = {
                     val keyword = query.trim()
                     if (keyword.isNotEmpty() || selectedCategory != null) {
-                        criteria = SearchCriteria(keyword, selectedCategory)
+                        val nextCriteria = SearchCriteria(keyword, selectedCategory)
+                        if (criteria == nextCriteria) refresh++ else criteria = nextCriteria
                     }
                 },
             ) { Text(stringResource(Res.string.search)) }
@@ -627,7 +674,14 @@ private fun SearchScreen(
                     state = value,
                     onRetry = { refresh++ },
                 ) {
-                    ComicGrid(it, onComicClick)
+                    ComicGrid(
+                        comics = it,
+                        onComicClick = onComicClick,
+                        loadingMore = loadingMore,
+                        canLoadMore = canLoadMore,
+                        loadMoreError = loadMoreError,
+                        onLoadMore = requestLoadMore,
+                    )
                 }
             }
         }
