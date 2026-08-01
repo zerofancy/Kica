@@ -61,7 +61,7 @@ internal interface PicaService {
 
     @GET("users/favourite")
     suspend fun favorites(
-        @Query("s") sort: String = "da",
+        @Query("s") sort: String = "dd",
         @Query("page") page: Int,
     ): ApiEnvelope
 

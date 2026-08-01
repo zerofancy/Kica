@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,15 +114,23 @@ fun ComicGrid(
         return
     }
     val gridState = rememberLazyGridState()
-    LaunchedEffect(gridState, comics.size, canLoadMore, loadingMore, loadMoreError) {
-        if (!canLoadMore || loadingMore || loadMoreError != null) return@LaunchedEffect
+    val currentCanLoadMore by rememberUpdatedState(canLoadMore)
+    val currentLoadingMore by rememberUpdatedState(loadingMore)
+    val currentLoadMoreError by rememberUpdatedState(loadMoreError)
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    LaunchedEffect(gridState) {
         snapshotFlow {
             val layoutInfo = gridState.layoutInfo
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            val triggerIndex = (layoutInfo.totalItemsCount - 4).coerceAtLeast(0)
-            layoutInfo.totalItemsCount > 0 && lastVisibleIndex >= triggerIndex
-        }.distinctUntilChanged().collect { nearEnd ->
-            if (nearEnd) onLoadMore()
+            shouldLoadMore(
+                totalItemsCount = layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = lastVisibleIndex,
+                canLoadMore = currentCanLoadMore,
+                loadingMore = currentLoadingMore,
+                hasLoadMoreError = currentLoadMoreError != null,
+            )
+        }.distinctUntilChanged().collect { shouldLoad ->
+            if (shouldLoad) currentOnLoadMore()
         }
     }
     Box(modifier.fillMaxSize()) {
@@ -159,6 +169,20 @@ fun ComicGrid(
         }
         PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
     }
+}
+
+internal fun shouldLoadMore(
+    totalItemsCount: Int,
+    lastVisibleItemIndex: Int,
+    canLoadMore: Boolean = true,
+    loadingMore: Boolean = false,
+    hasLoadMoreError: Boolean = false,
+    prefetchDistance: Int = 4,
+): Boolean {
+    if (!canLoadMore || loadingMore || hasLoadMoreError) return false
+    if (totalItemsCount <= 0 || lastVisibleItemIndex < 0) return false
+    val triggerIndex = (totalItemsCount - prefetchDistance).coerceAtLeast(0)
+    return lastVisibleItemIndex >= triggerIndex
 }
 
 @Composable

@@ -1011,14 +1011,65 @@ private data class SearchCriteria(
 private fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSummary) -> Unit) {
     var refresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
-    val state by produceState<LoadState<List<ComicSummary>>>(LoadState.Loading, refresh) {
-        value = runCatching { repository.favorites() }
-            .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
+    var state by remember { mutableStateOf<LoadState<List<ComicSummary>>>(LoadState.Loading) }
+    var loadedPage by remember { mutableIntStateOf(0) }
+    var totalPages by remember { mutableIntStateOf(0) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var loadMoreError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(refresh) {
+        loadedPage = 0
+        totalPages = 0
+        loadingMore = false
+        loadMoreError = null
+        state = LoadState.Loading
+        state = runCatching { repository.favorites(page = 1) }.fold(
+            onSuccess = { result ->
+                loadedPage = result.page
+                totalPages = result.totalPages
+                LoadState.Data(result.items)
+            },
+            onFailure = { LoadState.Error(it.message ?: loadFailed) },
+        )
+    }
+    val canLoadMore = state is LoadState.Data && loadedPage < totalPages
+    val requestLoadMore: () -> Unit = request@{
+        if (!canLoadMore || loadingMore) return@request
+        val nextPage = loadedPage + 1
+        val requestedRefresh = refresh
+        loadingMore = true
+        loadMoreError = null
+        scope.launch {
+            val result = runCatching { repository.favorites(page = nextPage) }
+            if (refresh != requestedRefresh) return@launch
+            result.fold(
+                onSuccess = { page ->
+                    val existing = (state as? LoadState.Data)?.value.orEmpty()
+                    state = LoadState.Data((existing + page.items).distinctBy(ComicSummary::id))
+                    loadedPage = maxOf(nextPage, page.page)
+                    totalPages = page.totalPages
+                },
+                onFailure = {
+                    loadMoreError = it.message ?: loadFailed
+                },
+            )
+            loadingMore = false
+        }
     }
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.favorites))
         Box(Modifier.weight(1f)) {
-            LoadStateContent(state, onRetry = { refresh++ }) { ComicGrid(it, onComicClick) }
+            LoadStateContent(state, onRetry = { refresh++ }) {
+                ComicGrid(
+                    comics = it,
+                    onComicClick = onComicClick,
+                    loadingMore = loadingMore,
+                    canLoadMore = canLoadMore,
+                    loadMoreError = loadMoreError,
+                    onLoadMore = requestLoadMore,
+                )
+            }
         }
     }
 }

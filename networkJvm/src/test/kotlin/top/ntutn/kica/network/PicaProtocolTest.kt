@@ -303,6 +303,51 @@ class PicaProtocolTest {
     }
 
     @Test
+    fun repositoryPreservesFavoritesPaginationAndRequestsNewestFirst() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setResponseCode(200)
+                    .setHeader("content-type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "code": 200,
+                          "data": {
+                            "comics": {
+                              "page": 2,
+                              "pages": 4,
+                              "docs": [{
+                                "_id": "favorite-2",
+                                "title": "Favorite page two",
+                                "thumb": {
+                                  "fileServer": "https://img.example",
+                                  "path": "favorite-two.jpg"
+                                }
+                              }]
+                            }
+                          }
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+            val repository = RealPicaRepository(
+                credentialStore = SessionCredentialStore(),
+                baseUrl = server.url("/").toString(),
+            )
+
+            val result = repository.favorites(page = 2)
+
+            assertEquals(2, result.page)
+            assertEquals(4, result.totalPages)
+            assertEquals(listOf("favorite-2"), result.items.map { it.id })
+            assertEquals(
+                "/users/favourite?s=dd&page=2",
+                assertNotNull(server.takeRequest()).path,
+            )
+        }
+    }
+
+    @Test
     fun repositoryCollectsAndSortsPaginatedEpisodes() = runTest {
         MockWebServer().use { server ->
             server.enqueue(

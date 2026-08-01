@@ -28,7 +28,7 @@ interface PicaRepository {
     suspend fun categories(): List<ComicCategory>
     suspend fun ranking(period: RankPeriod): List<ComicSummary>
     suspend fun search(keyword: String, categories: List<String> = emptyList(), page: Int = 1): ComicPage
-    suspend fun favorites(page: Int = 1): List<ComicSummary>
+    suspend fun favorites(page: Int = 1): ComicPage
     suspend fun comic(id: String): ComicDetail
     suspend fun episodes(comicId: String): List<Episode>
     suspend fun pages(comicId: String, episodeId: String): List<PageRef>

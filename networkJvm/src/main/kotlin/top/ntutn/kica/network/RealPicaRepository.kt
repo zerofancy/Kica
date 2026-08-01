@@ -124,9 +124,17 @@ class RealPicaRepository(
         )
     }
 
-    override suspend fun favorites(page: Int): List<ComicSummary> {
+    override suspend fun favorites(page: Int): ComicPage {
         val comics = service.favorites(page = page).requireSuccess().data.obj("comics")
-        return comics.array("docs").mapNotNull(JsonElement::comicSummary)
+        val items = comics.array("docs").mapNotNull(JsonElement::comicSummary)
+        val currentPage = comics.int("page") ?: page
+        val totalPages = comics.int("pages")
+            ?: if (items.isEmpty()) currentPage else currentPage + 1
+        return ComicPage(
+            items = items,
+            page = currentPage,
+            totalPages = totalPages.coerceAtLeast(currentPage),
+        )
     }
 
     override suspend fun comic(id: String): ComicDetail {
