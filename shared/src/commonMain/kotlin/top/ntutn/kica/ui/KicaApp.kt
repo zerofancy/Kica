@@ -73,6 +73,14 @@ fun KicaApp(
     val settings by libraryRepository.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
     val scope = rememberCoroutineScope()
     val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
+    val navigateBack = {
+        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+    }
+
+    PlatformBackHandler(
+        enabled = session != null && backStack.size > 1,
+        onBack = navigateBack,
+    )
 
     LaunchedEffect(Unit) {
         picaRepository.restoreSession()
@@ -104,8 +112,10 @@ fun KicaApp(
                 val navigate: (AppRoute) -> Unit = { target ->
                     if (target in rootDestinations.map { it.route }) {
                         backStack.clear()
+                        backStack.addAll(rootNavigationStackFor(target))
+                    } else if (backStack.lastOrNull() != target) {
+                        backStack.add(target)
                     }
-                    if (backStack.lastOrNull() != target) backStack.add(target)
                 }
                 val routeContent: @Composable () -> Unit = {
                     RouteContent(
@@ -115,9 +125,7 @@ fun KicaApp(
                         downloadCoordinator = downloadCoordinator,
                         platformServices = platformServices,
                         onNavigate = navigate,
-                        onBack = {
-                            if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                        },
+                        onBack = navigateBack,
                         onLogout = {
                             scope.launch {
                                 picaRepository.logout()
@@ -141,6 +149,9 @@ fun KicaApp(
     }
 }
 
+internal fun rootNavigationStackFor(target: AppRoute): List<AppRoute> =
+    if (target == AppRoute.Home) listOf(AppRoute.Home) else listOf(AppRoute.Home, target)
+
 @Composable
 private fun MainShell(
     route: AppRoute,
@@ -157,6 +168,14 @@ private fun MainShell(
         val navigationState = rememberNavigationState(
             initialExpanded = layout == WindowLayout.DESKTOP,
         )
+        PlatformBackHandler(
+            enabled = layout != WindowLayout.DESKTOP && navigationState.expanded,
+            onBack = { navigationState.expanded = false },
+        )
+        val selectDestination: (AppRoute) -> Unit = { destination ->
+            onNavigate(destination)
+            if (layout != WindowLayout.DESKTOP) navigationState.expanded = false
+        }
 
         NavigationView(
             modifier = Modifier.fillMaxSize(),
@@ -177,7 +196,7 @@ private fun MainShell(
                 rootDestinations.dropLast(1).forEach { destination ->
                     menuItem(
                         selected = route == destination.route,
-                        onClick = { onNavigate(destination.route) },
+                        onClick = { selectDestination(destination.route) },
                         text = { Text(stringResource(destination.label)) },
                         icon = { Icon(destination.icon, contentDescription = null) },
                         key = destination.route,
@@ -188,7 +207,7 @@ private fun MainShell(
                 rootDestinations.lastOrNull()?.let { destination ->
                     menuItem(
                         selected = route == destination.route,
-                        onClick = { onNavigate(destination.route) },
+                        onClick = { selectDestination(destination.route) },
                         text = { Text(stringResource(destination.label)) },
                         icon = { Icon(destination.icon, contentDescription = null) },
                         key = destination.route,
