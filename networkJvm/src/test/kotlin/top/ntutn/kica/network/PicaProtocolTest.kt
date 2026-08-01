@@ -161,6 +161,58 @@ class PicaProtocolTest {
     }
 
     @Test
+    fun repositoryFiltersWebOnlyCategories() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setResponseCode(200)
+                    .setHeader("content-type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "code": 200,
+                          "data": {
+                            "categories": [
+                              {
+                                "_id": "regular-category",
+                                "title": "Action",
+                                "description": "Regular comics",
+                                "isWeb": false,
+                                "thumb": {
+                                  "fileServer": "https://img.example",
+                                  "path": "action.jpg"
+                                }
+                              },
+                              {
+                                "_id": "web-category",
+                                "title": "小电影",
+                                "isWeb": true,
+                                "link": "https://example.com/videos",
+                                "thumb": {
+                                  "fileServer": "https://img.example",
+                                  "path": "videos.jpg"
+                                }
+                              },
+                              "Legacy"
+                            ]
+                          }
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+            val repository = RealPicaRepository(
+                credentialStore = SessionCredentialStore(),
+                baseUrl = server.url("/").toString(),
+            )
+
+            val categories = repository.categories()
+
+            assertEquals(listOf("Action", "Legacy"), categories.map { it.title })
+            assertEquals("https://img.example/static/action.jpg", categories.first().coverUrl)
+            assertEquals("/categories", assertNotNull(server.takeRequest()).path)
+        }
+    }
+
+    @Test
     fun repositoryPreservesSearchPaginationMetadata() = runTest {
         MockWebServer().use { server ->
             server.enqueue(

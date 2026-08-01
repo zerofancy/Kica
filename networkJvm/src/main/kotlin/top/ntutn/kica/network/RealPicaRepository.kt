@@ -82,6 +82,7 @@ class RealPicaRepository(
     override suspend fun categories(): List<ComicCategory> =
         service.categories().requireSuccess().data.array("categories").mapNotNull { element ->
             val item = element.obj()
+            if (item.bool("isWeb")) return@mapNotNull null
             val title = item?.string("title") ?: element.primitiveString()
             title?.let {
                 ComicCategory(
