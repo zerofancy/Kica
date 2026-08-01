@@ -171,6 +171,7 @@ sealed interface LoadState<out T> {
 sealed interface AppRoute {
     data object Home : AppRoute
     data object Discover : AppRoute
+    data object RandomComics : AppRoute
     data object Favorites : AppRoute
     data object History : AppRoute
     data object Downloads : AppRoute

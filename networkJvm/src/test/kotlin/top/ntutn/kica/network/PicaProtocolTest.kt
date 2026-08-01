@@ -161,6 +161,48 @@ class PicaProtocolTest {
     }
 
     @Test
+    fun repositoryRequestsAndMapsRandomComics() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setResponseCode(200)
+                    .setHeader("content-type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "code": 200,
+                          "data": {
+                            "comics": [{
+                              "_id": "random-1",
+                              "title": "Random example",
+                              "author": "Random author",
+                              "thumb": {
+                                "fileServer": "https://img.example",
+                                "path": "random.jpg"
+                              }
+                            }]
+                          }
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+            val repository = RealPicaRepository(
+                credentialStore = SessionCredentialStore(),
+                baseUrl = server.url("/").toString(),
+            )
+
+            val item = repository.randomComics().single()
+
+            assertEquals("random-1", item.id)
+            assertEquals("Random example", item.title)
+            assertEquals("Random author", item.author)
+            assertEquals("https://img.example/static/random.jpg", item.coverUrl)
+            val request = assertNotNull(server.takeRequest())
+            assertEquals("GET", request.method)
+            assertEquals("/comics/random", request.path)
+        }
+    }
+
+    @Test
     fun repositoryFiltersWebOnlyCategories() = runTest {
         MockWebServer().use { server ->
             server.enqueue(

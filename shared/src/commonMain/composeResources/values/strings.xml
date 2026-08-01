@@ -15,6 +15,8 @@
     <string name="search">搜索</string>
     <string name="recommended">为你推荐</string>
     <string name="random_comics">随机漫画</string>
+    <string name="random_books">随机本子</string>
+    <string name="shuffle_batch">换一批</string>
     <string name="categories">分类</string>
     <string name="ranking">排行榜</string>
     <string name="rank_24h">24 小时</string>

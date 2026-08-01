@@ -2,6 +2,7 @@ package top.ntutn.kica.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -48,8 +49,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -64,11 +72,13 @@ import io.github.composefluent.icons.filled.Heart as FilledHeart
 import io.github.composefluent.icons.regular.ArrowDownload
 import io.github.composefluent.icons.regular.ArrowExpand
 import io.github.composefluent.icons.regular.ArrowLeft
+import io.github.composefluent.icons.regular.ArrowSync
 import io.github.composefluent.icons.regular.Heart
 import io.github.composefluent.icons.regular.Maximize
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.icons.regular.Star
 import io.github.composefluent.icons.regular.Tag
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -133,6 +143,7 @@ import top.ntutn.kica.resources.proxy_http
 import top.ntutn.kica.resources.proxy_port
 import top.ntutn.kica.resources.proxy_socks5
 import top.ntutn.kica.resources.proxy_system
+import top.ntutn.kica.resources.random_books
 import top.ntutn.kica.resources.random_comics
 import top.ntutn.kica.resources.rank_24h
 import top.ntutn.kica.resources.rank_30d
@@ -149,11 +160,13 @@ import top.ntutn.kica.resources.reader_paged
 import top.ntutn.kica.resources.reader_rtl
 import top.ntutn.kica.resources.reader_vertical
 import top.ntutn.kica.resources.recommended
+import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.resume
 import top.ntutn.kica.resources.search
 import top.ntutn.kica.resources.search_failed
 import top.ntutn.kica.resources.search_hint
 import top.ntutn.kica.resources.settings
+import top.ntutn.kica.resources.shuffle_batch
 import top.ntutn.kica.resources.system_proxy
 import top.ntutn.kica.resources.theme
 import top.ntutn.kica.resources.theme_dark
@@ -234,6 +247,10 @@ fun RouteContent(
     when (route) {
         AppRoute.Home -> HomeScreen(picaRepository) { onNavigate(AppRoute.Detail(it.id)) }
         AppRoute.Discover -> DiscoverScreen(picaRepository, onNavigate)
+        AppRoute.RandomComics -> RandomComicsScreen(
+            repository = picaRepository,
+            onBack = onBack,
+        ) { onNavigate(AppRoute.Detail(it.id)) }
         AppRoute.Favorites -> FavoritesScreen(picaRepository) { onNavigate(AppRoute.Detail(it.id)) }
         AppRoute.History -> HistoryScreen(libraryRepository) { onNavigate(AppRoute.Detail(it.comic.id)) }
         AppRoute.Downloads -> DownloadsScreen(downloadCoordinator)
@@ -265,41 +282,102 @@ fun RouteContent(
     }
 }
 
+private class RandomComicsLoader(
+    private val repository: PicaRepository,
+    private val scope: CoroutineScope,
+    private val fallbackError: String,
+) {
+    var state by mutableStateOf(RandomComicsUiState())
+        private set
+
+    fun refresh() {
+        if (state.isLoading) return
+        state = state.startLoading()
+        scope.launch {
+            state = runCatching { repository.randomComics() }.fold(
+                onSuccess = state::loadSuccess,
+                onFailure = { state.loadFailure(it.message ?: fallbackError) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberRandomComicsLoader(repository: PicaRepository): RandomComicsLoader {
+    val fallbackError = stringResource(Res.string.load_failed)
+    val scope = rememberCoroutineScope()
+    val loader = remember(repository, fallbackError) {
+        RandomComicsLoader(repository, scope, fallbackError)
+    }
+    LaunchedEffect(loader) { loader.refresh() }
+    return loader
+}
+
 @Composable
 private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) -> Unit) {
-    var refresh by remember { mutableIntStateOf(0) }
+    var recommendationsRefresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
-    val state by produceState<LoadState<Pair<List<ComicSummary>, List<ComicSummary>>>>(
+    val recommendationsState by produceState<LoadState<List<ComicSummary>>>(
         initialValue = LoadState.Loading,
-        key1 = refresh,
+        key1 = recommendationsRefresh,
     ) {
-        value = runCatching { repository.recommendations() to repository.randomComics() }
+        value = runCatching { repository.recommendations() }
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
-    LoadStateContent(state, onRetry = { refresh++ }) { (recommendedItems, randomItems) ->
-        val gridState = rememberLazyGridState()
-        Box(Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(150.dp),
-                state = gridState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SectionTitle(stringResource(Res.string.recommended))
+    val randomLoader = rememberRandomComicsLoader(repository)
+    val randomState = randomLoader.state
+    val gridState = rememberLazyGridState()
+
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(150.dp),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SectionTitle(stringResource(Res.string.recommended))
+            }
+            when (val value = recommendationsState) {
+                is LoadState.Data -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    HorizontalComicRow(value.value, onComicClick)
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    HorizontalComicRow(recommendedItems, onComicClick)
+                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(value.message) { recommendationsRefresh++ }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Spacer(Modifier.height(6.dp))
+                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    FluentProgressBar(Modifier.fillMaxWidth())
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SectionTitle(stringResource(Res.string.random_comics))
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(Modifier.height(6.dp))
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SectionTitle(stringResource(Res.string.random_comics)) {
+                    RandomRefreshButton(randomLoader)
                 }
-                if (randomItems.isEmpty()) {
+            }
+            if (randomState.items == null) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    when {
+                        randomState.isLoading -> FluentProgressBar(Modifier.fillMaxWidth())
+                        randomState.errorMessage != null -> ErrorCard(randomState.errorMessage, randomLoader::refresh)
+                    }
+                }
+            } else {
+                if (randomState.isLoading) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        FluentProgressBar(Modifier.fillMaxWidth())
+                    }
+                }
+                randomState.errorMessage?.let { message ->
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        RandomRefreshError(message, randomLoader::refresh)
+                    }
+                }
+                if (randomState.items.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Text(
                             stringResource(Res.string.empty),
@@ -308,14 +386,113 @@ private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) 
                     }
                 } else {
                     gridItems(
-                        items = randomItems,
+                        items = randomState.items,
                         key = { "random:${it.id}" },
                     ) { comic ->
                         ComicCard(comic, onComicClick)
                     }
                 }
             }
-            PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
+        }
+        PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
+    }
+}
+
+@Composable
+private fun RandomComicsScreen(
+    repository: PicaRepository,
+    onBack: () -> Unit,
+    onComicClick: (ComicSummary) -> Unit,
+) {
+    val loader = rememberRandomComicsLoader(repository)
+    val state = loader.state
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(focusRequester) { focusRequester.requestFocus() }
+    Column(
+        modifier = Modifier.fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.F5 && event.type == KeyEventType.KeyUp) {
+                    loader.refresh()
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusRequester(focusRequester)
+            .focusable(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FluentIconButton(onClick = onBack) {
+                Icon(Icons.Regular.ArrowLeft, contentDescription = stringResource(Res.string.back))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(Res.string.random_books), style = FluentTheme.typography.title)
+            Spacer(Modifier.weight(1f))
+            RandomRefreshButton(loader)
+        }
+        when (val items = state.items) {
+            null -> LoadStateContent(
+                state = if (state.isLoading) {
+                    LoadState.Loading
+                } else {
+                    LoadState.Error(state.errorMessage ?: stringResource(Res.string.load_failed))
+                },
+                modifier = Modifier.weight(1f),
+                onRetry = loader::refresh,
+            ) { Unit }
+            else -> Column(Modifier.weight(1f).fillMaxWidth()) {
+                if (state.isLoading) {
+                    FluentProgressBar(Modifier.fillMaxWidth())
+                }
+                state.errorMessage?.let { message ->
+                    RandomRefreshError(message, loader::refresh)
+                }
+                ComicGrid(
+                    comics = items,
+                    onComicClick = onComicClick,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RandomRefreshButton(loader: RandomComicsLoader) {
+    FluentButton(
+        onClick = loader::refresh,
+        enabled = !loader.state.isLoading,
+    ) {
+        if (loader.state.isLoading) {
+            FluentProgressRing(Modifier.size(16.dp), size = 16.dp)
+        } else {
+            Icon(
+                Icons.Regular.ArrowSync,
+                contentDescription = stringResource(Res.string.shuffle_batch),
+            )
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(Res.string.shuffle_batch))
+    }
+}
+
+@Composable
+private fun RandomRefreshError(message: String, onRetry: () -> Unit) {
+    FluentCard(modifier = Modifier.fillMaxWidth(), onClick = onRetry) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                color = FluentTheme.colors.system.critical,
+            )
+            Text(stringResource(Res.string.retry), style = FluentTheme.typography.bodyStrong)
         }
     }
 }
@@ -374,6 +551,9 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(stringResource(Res.string.categories), style = FluentTheme.typography.subtitle)
+            }
+            item(key = "random-comics-entry") {
+                RandomComicsEntryCard(onClick = { onNavigate(AppRoute.RandomComics) })
             }
             when (val categoryValue = categoriesState) {
                 is LoadState.Data -> {
@@ -454,6 +634,42 @@ private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) ->
             }
         }
         PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
+    }
+}
+
+@Composable
+private fun RandomComicsEntryCard(onClick: () -> Unit) {
+    FluentCard(
+        modifier = Modifier.fillMaxWidth().aspectRatio(1.45f),
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .background(Brush.linearGradient(categoryCoverPalettes[1])),
+        ) {
+            Icon(
+                imageVector = Icons.Regular.ArrowSync,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.Center).size(52.dp),
+                tint = Color.White.copy(alpha = 0.9f),
+            )
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.62f),
+                        ),
+                    ),
+                ),
+            )
+            Text(
+                text = stringResource(Res.string.random_books),
+                modifier = Modifier.align(Alignment.BottomStart).padding(14.dp),
+                color = Color.White,
+                style = FluentTheme.typography.bodyStrong,
+            )
+        }
     }
 }
 
