@@ -1,7 +1,9 @@
 package top.ntutn.kica.ui
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -11,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.background.Mica
 import io.github.composefluent.component.Icon
@@ -81,7 +84,11 @@ fun KicaApp(
 
     KicaFluentTheme(settings.theme) {
         val loginFailed = stringResource(Res.string.login_failed)
-        Mica(Modifier.fillMaxSize()) {
+        Mica(
+            Modifier
+                .fillMaxSize()
+                .safeDrawingPadding(),
+        ) {
             if (session == null) {
                 LoginScreen(
                     onLogin = { email, password, onResult ->
@@ -155,6 +162,11 @@ private fun MainShell(
             modifier = Modifier.fillMaxSize(),
             displayMode = displayMode,
             state = navigationState,
+            contentPadding = if (layout == WindowLayout.PHONE) {
+                PaddingValues(top = 48.dp)
+            } else {
+                PaddingValues()
+            },
             title = {
                 Text(
                     text = "Kica",

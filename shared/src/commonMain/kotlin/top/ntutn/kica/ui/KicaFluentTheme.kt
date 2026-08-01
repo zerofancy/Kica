@@ -26,6 +26,8 @@ fun KicaFluentTheme(
         if (dark) darkColors(Color(0xFF0F6CBD)) else lightColors(Color(0xFF0F6CBD))
     }
 
+    PlatformSystemBars(dark)
+
     FluentTheme(
         colors = fluentColors,
         compactMode = true,

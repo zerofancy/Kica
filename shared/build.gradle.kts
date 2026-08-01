@@ -45,6 +45,11 @@ kotlin {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
         }
+        named("androidMain") {
+            dependencies {
+                implementation("androidx.core:core-ktx:1.16.0")
+            }
+        }
         named("desktopMain") {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
