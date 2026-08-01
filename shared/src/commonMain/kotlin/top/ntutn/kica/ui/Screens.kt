@@ -3,7 +3,9 @@ package top.ntutn.kica.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -59,6 +62,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,6 +88,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.abs
 import top.ntutn.kica.data.DownloadCoordinator
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
@@ -1318,6 +1324,7 @@ private fun PagedReader(
     onPageChanged: (Int) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerModifier = Modifier.fillMaxSize().mouseWheelPaging(pagerState)
     LaunchedEffect(initialPage, pages.size) {
         if (pages.isNotEmpty()) pagerState.scrollToPage(initialPage.coerceIn(pages.indices))
     }
@@ -1327,7 +1334,7 @@ private fun PagedReader(
     HorizontalPager(
         state = pagerState,
         reverseLayout = reverse,
-        modifier = Modifier.fillMaxSize(),
+        modifier = pagerModifier,
     ) { index ->
         ZoomablePage(pages[index], Modifier.fillMaxSize(), fit)
     }
@@ -1344,13 +1351,14 @@ private fun DoubleReader(
 ) {
     val pairs = remember(pages) { pages.chunked(2) }
     val pagerState = rememberPagerState(pageCount = { pairs.size })
+    val pagerModifier = Modifier.fillMaxSize().mouseWheelPaging(pagerState)
     LaunchedEffect(initialPage, pairs.size) {
         if (pairs.isNotEmpty()) pagerState.scrollToPage((initialPage / 2).coerceIn(pairs.indices))
     }
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }.distinctUntilChanged().collect { onPageChanged(it * 2) }
     }
-    HorizontalPager(state = pagerState, reverseLayout = reverse, modifier = Modifier.fillMaxSize()) { index ->
+    HorizontalPager(state = pagerState, reverseLayout = reverse, modifier = pagerModifier) { index ->
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
             pairs[index].forEach { page ->
                 ZoomablePage(page, Modifier.weight(1f).fillMaxHeight(), fit)
@@ -1364,8 +1372,15 @@ private fun ZoomablePage(page: PageRef, modifier: Modifier, fit: PageFit) {
     var scale by remember(page.index) { mutableFloatStateOf(1f) }
     Box(
         modifier = modifier.pointerInput(page.index) {
-            detectTransformGestures { _, _, zoom, _ ->
-                scale = (scale * zoom).coerceIn(1f, 4f)
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                do {
+                    val event = awaitPointerEvent()
+                    if (event.changes.count { it.pressed } >= 2) {
+                        scale = (scale * event.calculateZoom()).coerceIn(1f, 4f)
+                        event.changes.forEach { it.consume() }
+                    }
+                } while (event.changes.any { it.pressed })
             }
         },
         contentAlignment = Alignment.Center,
@@ -1376,6 +1391,41 @@ private fun ZoomablePage(page: PageRef, modifier: Modifier, fit: PageFit) {
             modifier = Modifier.fillMaxSize().scale(scale),
             contentScale = if (fit == PageFit.WIDTH) ContentScale.FillWidth else ContentScale.Fit,
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@Composable
+private fun Modifier.mouseWheelPaging(state: androidx.compose.foundation.pager.PagerState): Modifier {
+    val scope = rememberCoroutineScope()
+    var paging by remember(state) { mutableStateOf(false) }
+    return pointerInput(state, scope) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type != PointerEventType.Scroll) continue
+
+                val scroll = event.changes.firstOrNull()?.scrollDelta ?: continue
+                val delta = if (abs(scroll.y) >= abs(scroll.x)) scroll.y else scroll.x
+                if (delta != 0f) {
+                    event.changes.forEach { it.consume() }
+                    if (!paging && state.pageCount > 0) {
+                        val direction = if (delta > 0f) 1 else -1
+                        val target = (state.currentPage + direction).coerceIn(0, state.pageCount - 1)
+                        if (target != state.currentPage) {
+                            paging = true
+                            scope.launch {
+                                try {
+                                    state.animateScrollToPage(target)
+                                } finally {
+                                    paging = false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
