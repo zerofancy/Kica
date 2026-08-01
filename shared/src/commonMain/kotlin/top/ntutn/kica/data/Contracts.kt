@@ -40,6 +40,12 @@ interface LibraryRepository {
     fun history(): Flow<List<HistoryEntry>>
     fun downloads(): Flow<List<DownloadTask>>
     fun settings(): Flow<AppSettings>
+    suspend fun cachedRecommendations(): List<ComicSummary>?
+    suspend fun cacheRecommendations(recommendations: List<ComicSummary>)
+    suspend fun cachedRandomComics(): List<ComicSummary>?
+    suspend fun cacheRandomComics(comics: List<ComicSummary>)
+    suspend fun cachedCategories(): List<ComicCategory>?
+    suspend fun cacheCategories(categories: List<ComicCategory>)
     suspend fun readingProgress(comicId: String, episodeId: String): ReadingProgress?
     suspend fun saveProgress(progress: ReadingProgress)
     suspend fun addHistory(entry: HistoryEntry)

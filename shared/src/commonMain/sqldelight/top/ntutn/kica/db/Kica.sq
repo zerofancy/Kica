@@ -70,6 +70,8 @@ SELECT * FROM app_setting;
 upsertSetting:
 INSERT OR REPLACE INTO app_setting(key, value) VALUES (?, ?);
 
+deleteSetting:
+DELETE FROM app_setting WHERE key = ?;
+
 clearCache:
 DELETE FROM history_entry;
-

@@ -250,11 +250,40 @@ fun RouteContent(
     onBack: () -> Unit,
     onLogout: () -> Unit,
 ) {
+    RouteContent(
+        route = route,
+        picaRepository = picaRepository,
+        libraryRepository = libraryRepository,
+        randomComicsLoader = rememberRandomComicsLoader(picaRepository, libraryRepository),
+        downloadCoordinator = downloadCoordinator,
+        platformServices = platformServices,
+        onNavigate = onNavigate,
+        onBack = onBack,
+        onLogout = onLogout,
+    )
+}
+
+@Composable
+internal fun RouteContent(
+    route: AppRoute,
+    picaRepository: PicaRepository,
+    libraryRepository: LibraryRepository,
+    randomComicsLoader: RandomComicsLoader,
+    downloadCoordinator: DownloadCoordinator,
+    platformServices: PlatformServices,
+    onNavigate: (AppRoute) -> Unit,
+    onBack: () -> Unit,
+    onLogout: () -> Unit,
+) {
     when (route) {
-        AppRoute.Home -> HomeScreen(picaRepository) { onNavigate(AppRoute.Detail(it.id)) }
-        AppRoute.Discover -> DiscoverScreen(picaRepository, onNavigate)
-        AppRoute.RandomComics -> RandomComicsScreen(
+        AppRoute.Home -> HomeScreen(
             repository = picaRepository,
+            library = libraryRepository,
+            randomLoader = randomComicsLoader,
+        ) { onNavigate(AppRoute.Detail(it.id)) }
+        AppRoute.Discover -> DiscoverScreen(picaRepository, libraryRepository, onNavigate)
+        AppRoute.RandomComics -> RandomComicsScreen(
+            loader = randomComicsLoader,
             onBack = onBack,
         ) { onNavigate(AppRoute.Detail(it.id)) }
         AppRoute.Favorites -> FavoritesScreen(picaRepository) { onNavigate(AppRoute.Detail(it.id)) }
@@ -288,49 +317,97 @@ fun RouteContent(
     }
 }
 
-private class RandomComicsLoader(
-    private val repository: PicaRepository,
+internal class RandomComicsLoader(
+    private val fetchRandomComics: suspend () -> List<ComicSummary>,
+    private val readCache: suspend () -> List<ComicSummary>?,
+    private val writeCache: suspend (List<ComicSummary>) -> Unit,
     private val scope: CoroutineScope,
     private val fallbackError: String,
 ) {
+    private var didLoadOnce = false
+
     var state by mutableStateOf(RandomComicsUiState())
         private set
 
+    fun loadOnce() {
+        if (didLoadOnce) return
+        didLoadOnce = true
+        load(useCache = true)
+    }
+
     fun refresh() {
         if (state.isLoading) return
+        load(useCache = false)
+    }
+
+    private fun load(useCache: Boolean) {
         state = state.startLoading()
         scope.launch {
-            state = runCatching { repository.randomComics() }.fold(
-                onSuccess = state::loadSuccess,
-                onFailure = { state.loadFailure(it.message ?: fallbackError) },
-            )
+            if (useCache) {
+                runCatching { readCache() }.getOrNull()?.let { cached ->
+                    state = state.loadSuccess(cached).startLoading()
+                }
+            }
+            runCatching { fetchRandomComics() }
+                .onSuccess { comics ->
+                    state = state.loadSuccess(comics)
+                    runCatching { writeCache(comics) }
+                }
+                .onFailure { error ->
+                    state = state.loadFailure(error.message ?: fallbackError)
+                }
         }
     }
 }
 
 @Composable
-private fun rememberRandomComicsLoader(repository: PicaRepository): RandomComicsLoader {
+internal fun rememberRandomComicsLoader(
+    repository: PicaRepository,
+    library: LibraryRepository,
+): RandomComicsLoader {
     val fallbackError = stringResource(Res.string.load_failed)
     val scope = rememberCoroutineScope()
-    val loader = remember(repository, fallbackError) {
-        RandomComicsLoader(repository, scope, fallbackError)
+    val loader = remember(repository, library, fallbackError) {
+        RandomComicsLoader(
+            fetchRandomComics = repository::randomComics,
+            readCache = library::cachedRandomComics,
+            writeCache = library::cacheRandomComics,
+            scope = scope,
+            fallbackError = fallbackError,
+        )
     }
-    LaunchedEffect(loader) { loader.refresh() }
+    LaunchedEffect(loader) { loader.loadOnce() }
     return loader
 }
 
 @Composable
-private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) -> Unit) {
+private fun HomeScreen(
+    repository: PicaRepository,
+    library: LibraryRepository,
+    randomLoader: RandomComicsLoader,
+    onComicClick: (ComicSummary) -> Unit,
+) {
     var recommendationsRefresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
     val recommendationsState by produceState<LoadState<List<ComicSummary>>>(
         initialValue = LoadState.Loading,
         key1 = recommendationsRefresh,
     ) {
-        value = runCatching { repository.recommendations() }
-            .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
+        val cached = runCatching { library.cachedRecommendations() }.getOrNull()
+        if (cached != null) {
+            value = LoadState.Data(cached, fromCache = true)
+        }
+        runCatching { repository.recommendations() }
+            .onSuccess { recommendations ->
+                value = LoadState.Data(recommendations)
+                runCatching { library.cacheRecommendations(recommendations) }
+            }
+            .onFailure { error ->
+                if (cached == null) {
+                    value = LoadState.Error(error.message ?: loadFailed)
+                }
+            }
     }
-    val randomLoader = rememberRandomComicsLoader(repository)
     val randomState = randomLoader.state
     val gridState = rememberLazyGridState()
 
@@ -406,11 +483,10 @@ private fun HomeScreen(repository: PicaRepository, onComicClick: (ComicSummary) 
 
 @Composable
 private fun RandomComicsScreen(
-    repository: PicaRepository,
+    loader: RandomComicsLoader,
     onBack: () -> Unit,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    val loader = rememberRandomComicsLoader(repository)
     val state = loader.state
     val focusRequester = remember { FocusRequester() }
 
@@ -525,13 +601,29 @@ private fun HorizontalComicRow(comics: List<ComicSummary>, onComicClick: (ComicS
 }
 
 @Composable
-private fun DiscoverScreen(repository: PicaRepository, onNavigate: (AppRoute) -> Unit) {
+private fun DiscoverScreen(
+    repository: PicaRepository,
+    library: LibraryRepository,
+    onNavigate: (AppRoute) -> Unit,
+) {
     var selected by remember { mutableStateOf(RankPeriod.HOURS_24) }
     var refresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
     val categoriesState by produceState<LoadState<List<ComicCategory>>>(LoadState.Loading, refresh) {
-        value = runCatching { repository.categories() }
-            .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
+        val cached = runCatching { library.cachedCategories() }.getOrNull()
+        if (cached != null) {
+            value = LoadState.Data(cached, fromCache = true)
+        }
+        runCatching { repository.categories() }
+            .onSuccess { categories ->
+                value = LoadState.Data(categories)
+                runCatching { library.cacheCategories(categories) }
+            }
+            .onFailure { error ->
+                if (cached == null) {
+                    value = LoadState.Error(error.message ?: loadFailed)
+                }
+            }
     }
     val rankingState by produceState<LoadState<List<ComicSummary>>>(LoadState.Loading, selected, refresh) {
         value = runCatching { repository.ranking(selected) }

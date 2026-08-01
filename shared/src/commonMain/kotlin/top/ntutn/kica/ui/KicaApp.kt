@@ -108,6 +108,10 @@ fun KicaApp(
                     },
                 )
             } else {
+                val randomComicsLoader = rememberRandomComicsLoader(
+                    repository = picaRepository,
+                    library = libraryRepository,
+                )
                 val route = backStack.last()
                 val navigate: (AppRoute) -> Unit = { target ->
                     if (target in rootDestinations.map { it.route }) {
@@ -122,6 +126,7 @@ fun KicaApp(
                         route = route,
                         picaRepository = picaRepository,
                         libraryRepository = libraryRepository,
+                        randomComicsLoader = randomComicsLoader,
                         downloadCoordinator = downloadCoordinator,
                         platformServices = platformServices,
                         onNavigate = navigate,

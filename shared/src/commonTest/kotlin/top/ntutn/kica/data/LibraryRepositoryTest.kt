@@ -5,12 +5,35 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.HistoryEntry
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
 
 class LibraryRepositoryTest {
+    @Test
+    fun homeAndCategoryDataAreCachedAndCleared() = runTest {
+        val library = InMemoryLibraryRepository()
+        val comics = listOf(ComicSummary(id = "comic", title = "Comic"))
+        val categories = listOf(ComicCategory(id = "action", title = "Action"))
+
+        assertNull(library.cachedRecommendations())
+        assertNull(library.cachedRandomComics())
+        assertNull(library.cachedCategories())
+        library.cacheRecommendations(comics)
+        library.cacheRandomComics(comics)
+        library.cacheCategories(categories)
+        assertEquals(comics, library.cachedRecommendations())
+        assertEquals(comics, library.cachedRandomComics())
+        assertEquals(categories, library.cachedCategories())
+
+        library.clearCache()
+        assertNull(library.cachedRecommendations())
+        assertNull(library.cachedRandomComics())
+        assertNull(library.cachedCategories())
+    }
+
     @Test
     fun progressAndNewestHistorySurviveRepositoryReads() = runTest {
         val library = InMemoryLibraryRepository()

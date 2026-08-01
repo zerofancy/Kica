@@ -5,9 +5,47 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import top.ntutn.kica.model.ComicSummary
 
 class RandomComicsStateTest {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun loaderOnlyAutomaticallyRefreshesOnce() = runTest {
+        val cached = ComicSummary(id = "cached", title = "Cached")
+        val fresh = ComicSummary(id = "fresh", title = "Fresh")
+        val networkResponse = CompletableDeferred<List<ComicSummary>>()
+        var fetchCount = 0
+        var writtenCache: List<ComicSummary>? = null
+        val loader = RandomComicsLoader(
+            fetchRandomComics = {
+                fetchCount++
+                networkResponse.await()
+            },
+            readCache = { listOf(cached) },
+            writeCache = { writtenCache = it },
+            scope = this,
+            fallbackError = "failed",
+        )
+
+        loader.loadOnce()
+        loader.loadOnce()
+        runCurrent()
+
+        assertEquals(1, fetchCount)
+        assertEquals(listOf(cached), loader.state.items)
+        assertTrue(loader.state.isLoading)
+
+        networkResponse.complete(listOf(fresh))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf(fresh), loader.state.items)
+        assertEquals(listOf(fresh), writtenCache)
+    }
+
     @Test
     fun successfulRefreshReplacesExistingItems() {
         val oldItem = ComicSummary(id = "old", title = "Old")

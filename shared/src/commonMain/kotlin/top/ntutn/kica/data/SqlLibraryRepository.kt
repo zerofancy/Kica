@@ -10,6 +10,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import top.ntutn.kica.db.KicaDatabase
 import top.ntutn.kica.model.AppSettings
+import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.DownloadStatus
 import top.ntutn.kica.model.DownloadTask
@@ -70,6 +71,33 @@ class SqlLibraryRepository(
                     ?: AppSettings()
             }
 
+    override suspend fun cachedRecommendations(): List<ComicSummary>? =
+        queries.selectSetting(RECOMMENDATIONS_CACHE_KEY).executeAsOneOrNull()?.let { value ->
+            runCatching { json.decodeFromString<List<ComicSummary>>(value) }.getOrNull()
+        }
+
+    override suspend fun cacheRecommendations(recommendations: List<ComicSummary>) {
+        queries.upsertSetting(RECOMMENDATIONS_CACHE_KEY, json.encodeToString(recommendations))
+    }
+
+    override suspend fun cachedRandomComics(): List<ComicSummary>? =
+        queries.selectSetting(RANDOM_COMICS_CACHE_KEY).executeAsOneOrNull()?.let { value ->
+            runCatching { json.decodeFromString<List<ComicSummary>>(value) }.getOrNull()
+        }
+
+    override suspend fun cacheRandomComics(comics: List<ComicSummary>) {
+        queries.upsertSetting(RANDOM_COMICS_CACHE_KEY, json.encodeToString(comics))
+    }
+
+    override suspend fun cachedCategories(): List<ComicCategory>? =
+        queries.selectSetting(CATEGORIES_CACHE_KEY).executeAsOneOrNull()?.let { value ->
+            runCatching { json.decodeFromString<List<ComicCategory>>(value) }.getOrNull()
+        }
+
+    override suspend fun cacheCategories(categories: List<ComicCategory>) {
+        queries.upsertSetting(CATEGORIES_CACHE_KEY, json.encodeToString(categories))
+    }
+
     override suspend fun readingProgress(comicId: String, episodeId: String): ReadingProgress? =
         queries.selectProgress(comicId, episodeId).executeAsOneOrNull()?.let { row ->
             ReadingProgress(
@@ -125,11 +153,18 @@ class SqlLibraryRepository(
     }
 
     override suspend fun clearCache() {
-        queries.clearCache()
+        queries.transaction {
+            queries.clearCache()
+            queries.deleteSetting(RECOMMENDATIONS_CACHE_KEY)
+            queries.deleteSetting(RANDOM_COMICS_CACHE_KEY)
+            queries.deleteSetting(CATEGORIES_CACHE_KEY)
+        }
     }
 
     private companion object {
         const val SETTINGS_KEY = "app"
+        const val RECOMMENDATIONS_CACHE_KEY = "recommendations_cache"
+        const val RANDOM_COMICS_CACHE_KEY = "random_comics_cache"
+        const val CATEGORIES_CACHE_KEY = "categories_cache"
     }
 }
-
