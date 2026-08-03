@@ -4,6 +4,7 @@
 .idea/
 build/
 **/build/
+androidApp/release/
 local.properties
 *.iml
 *.jks

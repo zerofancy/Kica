@@ -1,8 +1,10 @@
 package top.ntutn.kica
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -52,6 +54,7 @@ internal class DownloadWorker(
         }
     }
 
+    @SuppressLint("InlinedApi")
     private fun foregroundInfo(title: String, completed: Int, total: Int): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
@@ -65,7 +68,11 @@ internal class DownloadWorker(
             .setOngoing(true)
             .setProgress(total.coerceAtLeast(0), completed.coerceAtLeast(0), total <= 0)
             .build()
-        return ForegroundInfo(id.hashCode(), notification)
+        return ForegroundInfo(
+            id.hashCode(),
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+        )
     }
 
     companion object {
