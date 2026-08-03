@@ -158,6 +158,7 @@ data class AppSettings(
     val readerMode: ReaderMode = ReaderMode.VERTICAL,
     val desktopDownloadConcurrency: Int = 5,
     val androidDownloadConcurrency: Int = 3,
+    val preventScreenshots: Boolean = true,
     val network: NetworkSettings = NetworkSettings(),
 )
 

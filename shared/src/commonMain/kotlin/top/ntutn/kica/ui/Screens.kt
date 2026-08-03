@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Icon
+import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.filled.Heart as FilledHeart
@@ -143,6 +144,7 @@ import top.ntutn.kica.resources.no_description
 import top.ntutn.kica.resources.ongoing
 import top.ntutn.kica.resources.password
 import top.ntutn.kica.resources.pause
+import top.ntutn.kica.resources.prevent_screenshots
 import top.ntutn.kica.resources.proxy_direct
 import top.ntutn.kica.resources.proxy_host
 import top.ntutn.kica.resources.proxy_http
@@ -1612,6 +1614,18 @@ private fun SettingsScreen(
                         label = { Text(stringResource(label)) },
                     )
                 }
+            }
+        }
+        if (!platformServices.isDesktop) {
+            SettingCard(stringResource(Res.string.prevent_screenshots)) {
+                Switcher(
+                    checked = settingsValue.preventScreenshots,
+                    onCheckStateChange = { enabled ->
+                        scope.launch {
+                            library.updateSettings(settingsValue.copy(preventScreenshots = enabled))
+                        }
+                    },
+                )
             }
         }
         SettingCard(stringResource(Res.string.network)) {
