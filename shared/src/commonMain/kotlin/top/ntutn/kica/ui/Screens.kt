@@ -75,6 +75,7 @@ import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.filled.Heart as FilledHeart
+import io.github.composefluent.icons.filled.Star as FilledStar
 import io.github.composefluent.icons.regular.ArrowDownload
 import io.github.composefluent.icons.regular.ArrowExpand
 import io.github.composefluent.icons.regular.ArrowLeft
@@ -181,6 +182,7 @@ import top.ntutn.kica.resources.theme_dark
 import top.ntutn.kica.resources.theme_light
 import top.ntutn.kica.resources.theme_system
 import top.ntutn.kica.resources.unfavorite
+import top.ntutn.kica.resources.unlike
 
 @Composable
 fun LoginScreen(
@@ -1209,6 +1211,10 @@ private fun DetailScreen(
     ) { padding ->
         LoadStateContent(state, Modifier.padding(padding), onRetry = { refresh++ }) { (comic, episodeItems) ->
             val scrollState = rememberScrollState()
+            var isFavorite by remember(comic.id, comic.isFavorite) { mutableStateOf(comic.isFavorite) }
+            var isLiked by remember(comic.id, comic.isLiked) { mutableStateOf(comic.isLiked) }
+            var favoriteBusy by remember(comic.id) { mutableStateOf(false) }
+            var likeBusy by remember(comic.id) { mutableStateOf(false) }
             Box(Modifier.fillMaxSize()) {
                 Column(
                     Modifier.fillMaxSize().verticalScroll(scrollState).padding(20.dp),
@@ -1232,18 +1238,47 @@ private fun DetailScreen(
                                 comic.tags.take(8).forEach { FluentChip(false, {}, { Text(it) }) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FluentButton(onClick = { scope.launch { repository.toggleFavorite(comic.id) } }) {
+                                FluentButton(
+                                    onClick = {
+                                        val previous = isFavorite
+                                        isFavorite = !previous
+                                        favoriteBusy = true
+                                        scope.launch {
+                                            val succeeded = runCatching { repository.toggleFavorite(comic.id) }
+                                                .getOrDefault(false)
+                                            if (!succeeded) isFavorite = previous
+                                            favoriteBusy = false
+                                        }
+                                    },
+                                    enabled = !favoriteBusy,
+                                ) {
                                     Icon(
-                                        if (comic.isFavorite) Icons.Filled.FilledHeart else Icons.Regular.Heart,
+                                        if (isFavorite) Icons.Filled.FilledStar else Icons.Regular.Star,
                                         contentDescription = null,
                                     )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(if (comic.isFavorite) Res.string.unfavorite else Res.string.favorite))
+                                    Text(stringResource(if (isFavorite) Res.string.unfavorite else Res.string.favorite))
                                 }
-                                FluentButton(onClick = { scope.launch { repository.like(comic.id) } }) {
-                                    Icon(Icons.Regular.Star, contentDescription = null)
+                                FluentButton(
+                                    onClick = {
+                                        val previous = isLiked
+                                        isLiked = !previous
+                                        likeBusy = true
+                                        scope.launch {
+                                            val succeeded = runCatching { repository.like(comic.id) }
+                                                .getOrDefault(false)
+                                            if (!succeeded) isLiked = previous
+                                            likeBusy = false
+                                        }
+                                    },
+                                    enabled = !likeBusy,
+                                ) {
+                                    Icon(
+                                        if (isLiked) Icons.Filled.FilledHeart else Icons.Regular.Heart,
+                                        contentDescription = null,
+                                    )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(Res.string.like))
+                                    Text(stringResource(if (isLiked) Res.string.unlike else Res.string.like))
                                 }
                             }
                         }
