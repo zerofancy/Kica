@@ -1,5 +1,6 @@
 package top.ntutn.kica.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,64 +91,75 @@ fun KicaApp(
         picaRepository.updateNetworkSettings(settings.network)
     }
 
-    KicaFluentTheme(settings.theme) {
+    val readerActive = session != null && backStack.lastOrNull() is AppRoute.Reader
+    KicaFluentTheme(
+        preference = settings.theme,
+        forceDarkSystemBars = readerActive,
+    ) {
         val loginFailed = stringResource(Res.string.login_failed)
-        Mica(
-            Modifier
-                .fillMaxSize()
-                .safeDrawingPadding(),
-        ) {
-            if (session == null) {
-                LoginScreen(
-                    onLogin = { email, password, onResult ->
-                        scope.launch {
-                            runCatching { picaRepository.login(email, password) }
-                                .onSuccess { onResult(null) }
-                                .onFailure { onResult(it.message ?: loginFailed) }
-                        }
-                    },
-                )
+        Mica(Modifier.fillMaxSize()) {
+            val contentModifier = if (readerActive) {
+                Modifier.fillMaxSize()
             } else {
-                val randomComicsLoader = rememberRandomComicsLoader(
-                    repository = picaRepository,
-                    library = libraryRepository,
-                )
-                val route = backStack.last()
-                val navigate: (AppRoute) -> Unit = { target ->
-                    if (target in rootDestinations.map { it.route }) {
-                        backStack.clear()
-                        backStack.addAll(rootNavigationStackFor(target))
-                    } else if (backStack.lastOrNull() != target) {
-                        backStack.add(target)
-                    }
-                }
-                val routeContent: @Composable () -> Unit = {
-                    RouteContent(
-                        route = route,
-                        picaRepository = picaRepository,
-                        libraryRepository = libraryRepository,
-                        randomComicsLoader = randomComicsLoader,
-                        downloadCoordinator = downloadCoordinator,
-                        platformServices = platformServices,
-                        onNavigate = navigate,
-                        onBack = navigateBack,
-                        onLogout = {
+                Modifier
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+            }
+            Box(
+                contentModifier,
+            ) {
+                if (session == null) {
+                    LoginScreen(
+                        onLogin = { email, password, onResult ->
                             scope.launch {
-                                picaRepository.logout()
-                                backStack.clear()
-                                backStack.add(AppRoute.Home)
+                                runCatching { picaRepository.login(email, password) }
+                                    .onSuccess { onResult(null) }
+                                    .onFailure { onResult(it.message ?: loginFailed) }
                             }
                         },
                     )
-                }
-                if (route is AppRoute.Reader) {
-                    routeContent()
                 } else {
-                    MainShell(
-                        route = route,
-                        onNavigate = navigate,
-                        content = routeContent,
+                    val randomComicsLoader = rememberRandomComicsLoader(
+                        repository = picaRepository,
+                        library = libraryRepository,
                     )
+                    val route = backStack.last()
+                    val navigate: (AppRoute) -> Unit = { target ->
+                        if (target in rootDestinations.map { it.route }) {
+                            backStack.clear()
+                            backStack.addAll(rootNavigationStackFor(target))
+                        } else if (backStack.lastOrNull() != target) {
+                            backStack.add(target)
+                        }
+                    }
+                    val routeContent: @Composable () -> Unit = {
+                        RouteContent(
+                            route = route,
+                            picaRepository = picaRepository,
+                            libraryRepository = libraryRepository,
+                            randomComicsLoader = randomComicsLoader,
+                            downloadCoordinator = downloadCoordinator,
+                            platformServices = platformServices,
+                            onNavigate = navigate,
+                            onBack = navigateBack,
+                            onLogout = {
+                                scope.launch {
+                                    picaRepository.logout()
+                                    backStack.clear()
+                                    backStack.add(AppRoute.Home)
+                                }
+                            },
+                        )
+                    }
+                    if (route is AppRoute.Reader) {
+                        routeContent()
+                    } else {
+                        MainShell(
+                            route = route,
+                            onNavigate = navigate,
+                            content = routeContent,
+                        )
+                    }
                 }
             }
         }

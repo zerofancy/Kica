@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -1394,7 +1395,12 @@ private fun ReaderScreen(
     val toolbarScrollState = rememberScrollState()
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         if (controlsVisible) {
-            Column(Modifier.fillMaxWidth().background(Color(0xCC202020))) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xCC202020))
+                    .statusBarsPadding(),
+            ) {
                 Row(
                     Modifier.fillMaxWidth()
                         .horizontalScroll(toolbarScrollState)
@@ -1447,7 +1453,12 @@ private fun ReaderScreen(
                 }
             }
             if (!controlsVisible) {
-                FluentIconButton(onClick = { controlsVisible = true }, modifier = Modifier.align(Alignment.TopEnd)) {
+                FluentIconButton(
+                    onClick = { controlsVisible = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding(),
+                ) {
                     Icon(Icons.Regular.ArrowExpand, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
                 }
             }

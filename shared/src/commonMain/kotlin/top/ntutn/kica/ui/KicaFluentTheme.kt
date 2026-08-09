@@ -14,6 +14,7 @@ import top.ntutn.kica.model.ThemePreference
 @Composable
 fun KicaFluentTheme(
     preference: ThemePreference = ThemePreference.SYSTEM,
+    forceDarkSystemBars: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -26,7 +27,7 @@ fun KicaFluentTheme(
         if (dark) darkColors(Color(0xFF0F6CBD)) else lightColors(Color(0xFF0F6CBD))
     }
 
-    PlatformSystemBars(dark)
+    PlatformSystemBars(dark || forceDarkSystemBars)
 
     FluentTheme(
         colors = fluentColors,
