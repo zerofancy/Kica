@@ -28,14 +28,21 @@ internal class DownloadWorker(
             return Result.success()
         }
 
-        setForeground(foregroundInfo(task.comic.title, task.completedPages, task.totalPages))
+        val settings = container.library.settings().first()
+        val notificationTitle = if (settings.titleTranslationEnabled) {
+            runCatching { container.titleTranslation.enable() }
+            container.titleTranslation.translate(task.comic.title) ?: task.comic.title
+        } else {
+            task.comic.title
+        }
+        setForeground(foregroundInfo(notificationTitle, task.completedPages, task.totalPages))
         return downloadPermits.withPermit {
             try {
                 HttpDownloadExecutor(container.pica).execute(task) { updated ->
                     container.library.upsertDownload(updated)
                     setForeground(
                         foregroundInfo(
-                            updated.comic.title,
+                            notificationTitle,
                             updated.completedPages,
                             updated.totalPages,
                         ),

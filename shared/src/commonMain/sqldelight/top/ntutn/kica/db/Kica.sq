@@ -33,6 +33,18 @@ CREATE TABLE app_setting (
     value TEXT NOT NULL
 );
 
+CREATE TABLE title_translation_cache (
+    source_text TEXT NOT NULL,
+    target_language TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    prompt_version INTEGER NOT NULL,
+    translated_text TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_accessed_at INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    PRIMARY KEY (source_text, target_language, model_id, prompt_version)
+);
+
 selectHistory:
 SELECT * FROM history_entry ORDER BY updated_at DESC;
 
@@ -75,3 +87,46 @@ DELETE FROM app_setting WHERE key = ?;
 
 clearCache:
 DELETE FROM history_entry;
+
+selectTitleTranslation:
+SELECT * FROM title_translation_cache
+WHERE source_text = ?
+  AND target_language = ?
+  AND model_id = ?
+  AND prompt_version = ?;
+
+upsertTitleTranslation:
+INSERT OR REPLACE INTO title_translation_cache(
+    source_text, target_language, model_id, prompt_version, translated_text,
+    created_at, last_accessed_at, size_bytes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+touchTitleTranslation:
+UPDATE title_translation_cache
+SET last_accessed_at = ?
+WHERE source_text = ?
+  AND target_language = ?
+  AND model_id = ?
+  AND prompt_version = ?;
+
+deleteExpiredTitleTranslations:
+DELETE FROM title_translation_cache WHERE created_at <= ?;
+
+selectTitleTranslationCacheSize:
+SELECT COALESCE(SUM(size_bytes), 0) FROM title_translation_cache;
+
+selectLeastRecentlyUsedTitleTranslation:
+SELECT source_text, target_language, model_id, prompt_version
+FROM title_translation_cache
+ORDER BY last_accessed_at ASC, created_at ASC
+LIMIT 1;
+
+deleteTitleTranslation:
+DELETE FROM title_translation_cache
+WHERE source_text = ?
+  AND target_language = ?
+  AND model_id = ?
+  AND prompt_version = ?;
+
+clearTitleTranslationCache:
+DELETE FROM title_translation_cache;

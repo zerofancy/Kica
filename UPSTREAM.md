@@ -53,3 +53,9 @@ The following upstream areas are intentionally not ported in the core release:
 Future upstream changes should be isolated in `networkJvm`; shared domain and UI
 code should not depend on wire DTOs.
 
+## Local inference dependency
+
+- Repository: <https://github.com/ferranpons/Llamatik>
+- Version: `1.9.1`
+- Scope: local GGUF model loading, chat-template application, and constrained
+  JSON generation for optional Simplified Chinese work-title translation.

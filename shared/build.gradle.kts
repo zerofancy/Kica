@@ -24,7 +24,7 @@ kotlin {
 
     jvm("desktop") {
         compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+            jvmTarget.set(JvmTarget.JVM_21)
         }
     }
 
@@ -40,6 +40,7 @@ kotlin {
             implementation("io.coil-kt.coil3:coil-compose:3.5.0")
             implementation("app.cash.sqldelight:runtime:2.1.0")
             implementation("app.cash.sqldelight:coroutines-extensions:2.1.0")
+            implementation("com.llamatik:library:1.9.1")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

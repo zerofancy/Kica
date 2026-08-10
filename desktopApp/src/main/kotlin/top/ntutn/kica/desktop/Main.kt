@@ -12,9 +12,12 @@ import java.awt.Dimension
 import java.nio.file.Files
 import java.nio.file.Path
 import org.jetbrains.compose.resources.painterResource
+import top.ntutn.kica.data.DefaultTitleTranslationService
+import top.ntutn.kica.data.SqlTitleTranslationCache
 import top.ntutn.kica.data.SqlLibraryRepository
-import top.ntutn.kica.db.KicaDatabase
+import top.ntutn.kica.data.createKicaDatabase
 import top.ntutn.kica.network.HttpDownloadExecutor
+import top.ntutn.kica.network.JvmTitleTranslationModelStore
 import top.ntutn.kica.network.RealPicaRepository
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.kica_icon
@@ -23,13 +26,19 @@ import top.ntutn.kica.ui.KicaApp
 fun main() = application {
     val dataDirectory = remember { applicationDataDirectory() }
     val platform = remember { DesktopPlatformServices(dataDirectory) }
-    val library = remember {
+    val database = remember {
         Files.createDirectories(dataDirectory)
         val databasePath = dataDirectory.resolve("kica.db")
         val newDatabase = Files.notExists(databasePath)
         val driver = JdbcSqliteDriver("jdbc:sqlite:$databasePath")
-        if (newDatabase) KicaDatabase.Schema.create(driver)
-        SqlLibraryRepository(KicaDatabase(driver))
+        createKicaDatabase(driver, newDatabase)
+    }
+    val library = remember { SqlLibraryRepository(database) }
+    val titleTranslation = remember {
+        DefaultTitleTranslationService(
+            modelStore = JvmTitleTranslationModelStore(dataDirectory.resolve("models").toFile()),
+            cache = SqlTitleTranslationCache(database),
+        )
     }
     val pica = remember { RealPicaRepository(platform.credentialStore) }
     val downloads = remember {
@@ -45,14 +54,18 @@ fun main() = application {
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(880, 600)
         }
-        DisposableEffect(downloads) {
-            onDispose(downloads::close)
+        DisposableEffect(downloads, titleTranslation) {
+            onDispose {
+                downloads.close()
+                titleTranslation.close()
+            }
         }
         KicaApp(
             picaRepository = pica,
             libraryRepository = library,
             downloadCoordinator = downloads,
             platformServices = platform,
+            titleTranslationService = titleTranslation,
         )
     }
 }

@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
                 libraryRepository = container.library,
                 downloadCoordinator = container.downloads,
                 platformServices = container.platform,
+                titleTranslationService = container.titleTranslation,
             )
         }
     }

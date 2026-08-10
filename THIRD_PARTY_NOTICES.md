@@ -28,6 +28,8 @@ protocol compatibility. See `UPSTREAM.md` for the reviewed scope.
 | OkHttp and MockWebServer | Apache License 2.0 |
 | kotlinx.serialization Retrofit converter | Apache License 2.0 |
 | SQLDelight | Apache License 2.0 |
+| Llamatik 1.9.1 | MIT License (repository LICENSE; published POM identifies Apache License 2.0) |
+| Qwen2.5-0.5B-Instruct model | Apache License 2.0 |
 | Coil | Apache License 2.0 |
 | FileKit | MIT License |
 | Java Native Access (JNA) | LGPL-2.1-or-later or Apache License 2.0 |
@@ -50,6 +52,10 @@ Retrofit and OkHttp: <https://github.com/square/retrofit> and
 <https://github.com/square/okhttp>
 
 SQLDelight: <https://github.com/sqldelight/sqldelight>
+
+Llamatik: <https://github.com/ferranpons/Llamatik> (tag `1.9.1`)
+
+Qwen2.5-0.5B-Instruct: <https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct>
 
 Coil: <https://github.com/coil-kt/coil>
 

@@ -187,6 +187,7 @@ internal fun shouldLoadMore(
 
 @Composable
 fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
+    val displayTitle = translatedTitle(comic.title)
     FluentCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onClick(comic) },
@@ -207,7 +208,7 @@ fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
                 } else {
                     AsyncImage(
                         model = comic.coverUrl,
-                        contentDescription = comic.title,
+                        contentDescription = displayTitle,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
@@ -215,7 +216,7 @@ fun ComicCard(comic: ComicSummary, onClick: (ComicSummary) -> Unit) {
             }
             Column(Modifier.padding(10.dp)) {
                 Text(
-                    comic.title,
+                    displayTitle,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     style = FluentTheme.typography.bodyStrong,

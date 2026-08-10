@@ -159,6 +159,7 @@ data class AppSettings(
     val desktopDownloadConcurrency: Int = 5,
     val androidDownloadConcurrency: Int = 3,
     val preventScreenshots: Boolean = true,
+    val titleTranslationEnabled: Boolean = false,
     val network: NetworkSettings = NetworkSettings(),
 )
 

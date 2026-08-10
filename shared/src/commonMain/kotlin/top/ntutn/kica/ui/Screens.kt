@@ -69,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Icon
@@ -96,6 +97,7 @@ import top.ntutn.kica.data.DownloadCoordinator
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
+import top.ntutn.kica.data.TitleTranslationState
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.ComicDetail
 import top.ntutn.kica.model.ComicCategory
@@ -119,10 +121,13 @@ import top.ntutn.kica.resources.cache
 import top.ntutn.kica.resources.cancel
 import top.ntutn.kica.resources.categories
 import top.ntutn.kica.resources.clear_cache
+import top.ntutn.kica.resources.confirm
 import top.ntutn.kica.resources.choose_export_location
 import top.ntutn.kica.resources.discover
 import top.ntutn.kica.resources.download
 import top.ntutn.kica.resources.download_location
+import top.ntutn.kica.resources.download_translation_model
+import top.ntutn.kica.resources.download_translation_model_message
 import top.ntutn.kica.resources.downloads
 import top.ntutn.kica.resources.email
 import top.ntutn.kica.resources.empty
@@ -182,6 +187,13 @@ import top.ntutn.kica.resources.theme
 import top.ntutn.kica.resources.theme_dark
 import top.ntutn.kica.resources.theme_light
 import top.ntutn.kica.resources.theme_system
+import top.ntutn.kica.resources.title_translation
+import top.ntutn.kica.resources.title_translation_description
+import top.ntutn.kica.resources.translation_model_downloading
+import top.ntutn.kica.resources.translation_model_error
+import top.ntutn.kica.resources.translation_model_loading
+import top.ntutn.kica.resources.translation_model_missing
+import top.ntutn.kica.resources.translation_model_ready
 import top.ntutn.kica.resources.unfavorite
 import top.ntutn.kica.resources.unlike
 
@@ -530,7 +542,7 @@ private fun RandomComicsScreen(
                 },
                 modifier = Modifier.weight(1f),
                 onRetry = loader::refresh,
-            ) { Unit }
+            ) {}
             else -> Column(Modifier.weight(1f).fillMaxWidth()) {
                 if (state.isLoading) {
                     FluentProgressBar(Modifier.fillMaxWidth())
@@ -1095,6 +1107,7 @@ private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) ->
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(historyItems, key = { it.comic.id }) { entry ->
+                        val displayTitle = translatedTitle(entry.comic.title)
                         FluentCard(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { onClick(entry) },
@@ -1102,13 +1115,13 @@ private fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) ->
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 AsyncImage(
                                     model = entry.comic.coverUrl,
-                                    contentDescription = entry.comic.title,
+                                    contentDescription = displayTitle,
                                     modifier = Modifier.size(64.dp),
                                     contentScale = ContentScale.Crop,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column {
-                                    Text(entry.comic.title, style = FluentTheme.typography.bodyStrong)
+                                    Text(displayTitle, style = FluentTheme.typography.bodyStrong)
                                     Text(
                                         "${entry.episodeTitle} · ${entry.pageIndex + 1}",
                                         color = FluentTheme.colors.text.text.secondary,
@@ -1141,9 +1154,10 @@ private fun DownloadsScreen(coordinator: DownloadCoordinator) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(tasks, key = { it.id }) { task ->
+                        val displayTitle = translatedTitle(task.comic.title)
                         FluentCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
-                                Text(task.comic.title, style = FluentTheme.typography.bodyStrong)
+                                Text(displayTitle, style = FluentTheme.typography.bodyStrong)
                                 Text(task.episode.title, color = FluentTheme.colors.text.text.secondary)
                                 Spacer(Modifier.height(8.dp))
                                 FluentProgressBar(
@@ -1212,6 +1226,7 @@ private fun DetailScreen(
     ) { padding ->
         LoadStateContent(state, Modifier.padding(padding), onRetry = { refresh++ }) { (comic, episodeItems) ->
             val scrollState = rememberScrollState()
+            val displayTitle = translatedTitle(comic.title)
             var isFavorite by remember(comic.id, comic.isFavorite) { mutableStateOf(comic.isFavorite) }
             var isLiked by remember(comic.id, comic.isLiked) { mutableStateOf(comic.isLiked) }
             var favoriteBusy by remember(comic.id) { mutableStateOf(false) }
@@ -1224,12 +1239,19 @@ private fun DetailScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         AsyncImage(
                             model = comic.coverUrl,
-                            contentDescription = comic.title,
+                            contentDescription = displayTitle,
                             modifier = Modifier.width(180.dp).aspectRatio(0.72f),
                             contentScale = ContentScale.Crop,
                         )
                         Column(Modifier.weight(1f)) {
-                            Text(comic.title, style = FluentTheme.typography.title)
+                            Text(displayTitle, style = FluentTheme.typography.title)
+                            if (displayTitle != comic.title) {
+                                Text(
+                                    comic.title,
+                                    style = FluentTheme.typography.caption,
+                                    color = FluentTheme.colors.text.text.secondary,
+                                )
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text("${stringResource(Res.string.author)}：${comic.author}")
                             Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
@@ -1627,6 +1649,12 @@ private fun SettingsScreen(
     onLogout: () -> Unit,
 ) {
     val settingsValue by library.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
+    val titleTranslationService = LocalTitleTranslationService.current
+    val translationState = titleTranslationService?.state?.collectAsState()?.value
+        ?: TitleTranslationState.Disabled
+    val translationModelAvailable by produceState(false, titleTranslationService, translationState) {
+        value = titleTranslationService?.isModelAvailable() == true
+    }
     val scope = rememberCoroutineScope()
     val downloadLocation by produceState("") {
         value = platformServices.fileLocationProvider.defaultDownloadLocation()
@@ -1638,8 +1666,23 @@ private fun SettingsScreen(
         mutableStateOf(settingsValue.network.proxyPort.takeIf { it > 0 }?.toString().orEmpty())
     }
     var exportLocation by remember { mutableStateOf<String?>(null) }
+    var showModelConfirmation by remember { mutableStateOf(false) }
     val settingsScrollState = rememberScrollState()
     val proxyModeScrollState = rememberScrollState()
+    val translationBusy = translationState is TitleTranslationState.Downloading ||
+        translationState == TitleTranslationState.LoadingModel
+    val enableTitleTranslation: () -> Unit = {
+        titleTranslationService?.let { service ->
+            scope.launch {
+                runCatching { service.enable() }
+                    .onSuccess {
+                        library.updateSettings(
+                            library.settings().first().copy(titleTranslationEnabled = true),
+                        )
+                    }
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(settingsScrollState).padding(20.dp),
@@ -1672,6 +1715,76 @@ private fun SettingsScreen(
                         }
                     },
                 )
+            }
+        }
+        SettingCard(stringResource(Res.string.title_translation)) {
+            Text(
+                stringResource(Res.string.title_translation_description),
+                style = FluentTheme.typography.caption,
+                color = FluentTheme.colors.text.text.secondary,
+            )
+            Switcher(
+                checked = settingsValue.titleTranslationEnabled,
+                onCheckStateChange = { enabled ->
+                    if (translationBusy || titleTranslationService == null) return@Switcher
+                    if (!enabled) {
+                        scope.launch {
+                            library.updateSettings(
+                                library.settings().first().copy(titleTranslationEnabled = false),
+                            )
+                            titleTranslationService.disable()
+                        }
+                    } else {
+                        scope.launch {
+                            if (titleTranslationService.isModelAvailable()) {
+                                enableTitleTranslation()
+                            } else {
+                                showModelConfirmation = true
+                            }
+                        }
+                    }
+                },
+            )
+            when (val current = translationState) {
+                TitleTranslationState.Disabled -> Text(
+                    stringResource(
+                        if (translationModelAvailable) Res.string.translation_model_ready
+                        else Res.string.translation_model_missing,
+                    ),
+                    style = FluentTheme.typography.caption,
+                )
+                is TitleTranslationState.Downloading -> {
+                    val progress = if (current.totalBytes <= 0L) 0f
+                    else current.downloadedBytes.toFloat() / current.totalBytes
+                    Text(
+                        stringResource(
+                            Res.string.translation_model_downloading,
+                            (progress * 100).toInt().coerceIn(0, 100),
+                        ),
+                        style = FluentTheme.typography.caption,
+                    )
+                    FluentProgressBar(progress.coerceIn(0f, 1f), Modifier.fillMaxWidth())
+                    FluentTextButton(onClick = { titleTranslationService?.cancelPreparation() }) {
+                        Text(stringResource(Res.string.cancel))
+                    }
+                }
+                TitleTranslationState.LoadingModel -> {
+                    Text(stringResource(Res.string.translation_model_loading))
+                    FluentProgressBar(Modifier.fillMaxWidth())
+                }
+                TitleTranslationState.Ready -> Text(
+                    stringResource(Res.string.translation_model_ready),
+                    style = FluentTheme.typography.caption,
+                )
+                is TitleTranslationState.Error -> {
+                    Text(
+                        stringResource(Res.string.translation_model_error, current.message),
+                        color = FluentTheme.colors.system.critical,
+                    )
+                    FluentButton(onClick = enableTitleTranslation) {
+                        Text(stringResource(Res.string.retry))
+                    }
+                }
             }
         }
         SettingCard(stringResource(Res.string.network)) {
@@ -1757,7 +1870,12 @@ private fun SettingsScreen(
             }
         }
         SettingCard(stringResource(Res.string.cache)) {
-            FluentButton(onClick = { scope.launch { library.clearCache() } }) {
+            FluentButton(onClick = {
+                scope.launch {
+                    library.clearCache()
+                    titleTranslationService?.clearCache()
+                }
+            }) {
                 Text(stringResource(Res.string.clear_cache))
             }
         }
@@ -1769,6 +1887,46 @@ private fun SettingsScreen(
         }
         }
         PlatformVerticalScrollbar(settingsScrollState, Modifier.align(Alignment.CenterEnd))
+    }
+    if (showModelConfirmation) {
+        ModelDownloadConfirmationDialog(
+            onConfirm = {
+                showModelConfirmation = false
+                enableTitleTranslation()
+            },
+            onDismiss = { showModelConfirmation = false },
+        )
+    }
+}
+
+@Composable
+private fun ModelDownloadConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        PlatformBackHandler(enabled = true, onBack = onDismiss)
+        FluentCard(Modifier.width(440.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    stringResource(Res.string.download_translation_model),
+                    style = FluentTheme.typography.subtitle,
+                )
+                Text(stringResource(Res.string.download_translation_model_message))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    FluentTextButton(onClick = onDismiss) {
+                        Text(stringResource(Res.string.cancel))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FluentPrimaryButton(onClick = onConfirm) {
+                        Text(stringResource(Res.string.confirm))
+                    }
+                }
+            }
+        }
     }
 }
 

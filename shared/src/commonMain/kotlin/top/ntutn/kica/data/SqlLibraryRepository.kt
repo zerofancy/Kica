@@ -158,6 +158,7 @@ class SqlLibraryRepository(
             queries.deleteSetting(RECOMMENDATIONS_CACHE_KEY)
             queries.deleteSetting(RANDOM_COMICS_CACHE_KEY)
             queries.deleteSetting(CATEGORIES_CACHE_KEY)
+            queries.clearTitleTranslationCache()
         }
     }
 

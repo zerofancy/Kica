@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ import top.ntutn.kica.data.DownloadCoordinator
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
+import top.ntutn.kica.data.TitleTranslationService
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.ThemePreference
 import top.ntutn.kica.resources.Res
@@ -69,6 +71,7 @@ fun KicaApp(
     libraryRepository: LibraryRepository,
     downloadCoordinator: DownloadCoordinator,
     platformServices: PlatformServices,
+    titleTranslationService: TitleTranslationService,
 ) {
     val session by picaRepository.session.collectAsState()
     val settings by libraryRepository.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
@@ -89,13 +92,22 @@ fun KicaApp(
     }
     LaunchedEffect(settings.network) {
         picaRepository.updateNetworkSettings(settings.network)
+        titleTranslationService.updateNetworkSettings(settings.network)
+    }
+    LaunchedEffect(settings.titleTranslationEnabled) {
+        if (settings.titleTranslationEnabled) {
+            runCatching { titleTranslationService.enable() }
+        } else {
+            titleTranslationService.disable()
+        }
     }
 
     val readerActive = session != null && backStack.lastOrNull() is AppRoute.Reader
-    KicaFluentTheme(
-        preference = settings.theme,
-        forceDarkSystemBars = readerActive,
-    ) {
+    CompositionLocalProvider(LocalTitleTranslationService provides titleTranslationService) {
+        KicaFluentTheme(
+            preference = settings.theme,
+            forceDarkSystemBars = readerActive,
+        ) {
         val loginFailed = stringResource(Res.string.login_failed)
         Mica(Modifier.fillMaxSize()) {
             val contentModifier = if (readerActive) {
@@ -162,6 +174,7 @@ fun KicaApp(
                     }
                 }
             }
+        }
         }
     }
 }
