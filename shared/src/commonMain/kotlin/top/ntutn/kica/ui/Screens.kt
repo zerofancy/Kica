@@ -98,6 +98,7 @@ import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
 import top.ntutn.kica.data.TitleTranslationState
+import top.ntutn.kica.data.sha256
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.ComicDetail
 import top.ntutn.kica.model.ComicCategory
@@ -148,6 +149,10 @@ import top.ntutn.kica.resources.logging_in
 import top.ntutn.kica.resources.logout
 import top.ntutn.kica.resources.network
 import top.ntutn.kica.resources.no_description
+import top.ntutn.kica.resources.lock_screen
+import top.ntutn.kica.resources.lock_screen_description
+import top.ntutn.kica.resources.lock_set_password
+import top.ntutn.kica.resources.lock_change_password
 import top.ntutn.kica.resources.ongoing
 import top.ntutn.kica.resources.password
 import top.ntutn.kica.resources.pause
@@ -1667,6 +1672,7 @@ private fun SettingsScreen(
     }
     var exportLocation by remember { mutableStateOf<String?>(null) }
     var showModelConfirmation by remember { mutableStateOf(false) }
+    var showLockDialog by remember { mutableStateOf(false) }
     val settingsScrollState = rememberScrollState()
     val proxyModeScrollState = rememberScrollState()
     val translationBusy = translationState is TitleTranslationState.Downloading ||
@@ -1703,6 +1709,39 @@ private fun SettingsScreen(
                         label = { Text(stringResource(label)) },
                     )
                 }
+            }
+        }
+        SettingCard(stringResource(Res.string.lock_screen)) {
+            Text(
+                stringResource(Res.string.lock_screen_description),
+                style = FluentTheme.typography.caption,
+                color = FluentTheme.colors.text.text.secondary,
+            )
+            Switcher(
+                checked = settingsValue.lockEnabled,
+                onCheckStateChange = { enabled ->
+                    if (enabled && settingsValue.lockPasswordHash == null) {
+                        showLockDialog = true
+                    } else if (enabled) {
+                        scope.launch {
+                            library.updateSettings(settingsValue.copy(lockEnabled = true))
+                        }
+                    } else {
+                        scope.launch {
+                            library.updateSettings(settingsValue.copy(lockEnabled = false))
+                        }
+                    }
+                },
+            )
+            FluentTextButton(
+                onClick = { showLockDialog = true },
+            ) {
+                Text(
+                    stringResource(
+                        if (settingsValue.lockPasswordHash == null) Res.string.lock_set_password
+                        else Res.string.lock_change_password,
+                    ),
+                )
             }
         }
         if (!platformServices.isDesktop) {
@@ -1895,6 +1934,19 @@ private fun SettingsScreen(
                 enableTitleTranslation()
             },
             onDismiss = { showModelConfirmation = false },
+        )
+    }
+    if (showLockDialog) {
+        LockSettingsDialog(
+            onConfirm = { password ->
+                showLockDialog = false
+                scope.launch {
+                    library.updateSettings(
+                        settingsValue.copy(lockEnabled = true, lockPasswordHash = sha256(password)),
+                    )
+                }
+            },
+            onDismiss = { showLockDialog = false },
         )
     }
 }

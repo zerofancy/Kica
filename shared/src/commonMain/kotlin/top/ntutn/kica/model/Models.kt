@@ -161,6 +161,8 @@ data class AppSettings(
     val preventScreenshots: Boolean = true,
     val titleTranslationEnabled: Boolean = false,
     val network: NetworkSettings = NetworkSettings(),
+    val lockEnabled: Boolean = false,
+    val lockPasswordHash: String? = null,
 )
 
 sealed interface LoadState<out T> {

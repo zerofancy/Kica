@@ -11,8 +11,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -32,6 +35,7 @@ import io.github.composefluent.icons.regular.Home
 import io.github.composefluent.icons.regular.Navigation
 import io.github.composefluent.icons.regular.Settings
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.DownloadCoordinator
@@ -76,6 +80,10 @@ fun KicaApp(
     val session by picaRepository.session.collectAsState()
     val settings by libraryRepository.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
     val scope = rememberCoroutineScope()
+    var locked by remember { mutableStateOf(false) }
+    var backgroundSince by remember { mutableLongStateOf(0L) }
+    var lockInitialized by remember { mutableStateOf(false) }
+    val lockPasswordHash = settings.lockPasswordHash
     val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
     val navigateBack = {
         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
@@ -102,6 +110,32 @@ fun KicaApp(
         }
     }
 
+    PlatformLifecycleObserver(
+        onBackground = {
+            if (settings.lockEnabled && lockPasswordHash != null) {
+                backgroundSince = Clock.System.now().toEpochMilliseconds()
+            }
+        },
+        onForeground = {
+            if (settings.lockEnabled && lockPasswordHash != null) {
+                if (backgroundSince > 0L && Clock.System.now().toEpochMilliseconds() - backgroundSince >= 3_000L) {
+                    locked = true
+                }
+                backgroundSince = 0L
+            }
+        },
+    )
+
+    LaunchedEffect(settings.lockEnabled, lockPasswordHash) {
+        if (!lockInitialized && settings.lockEnabled && lockPasswordHash != null) {
+            lockInitialized = true
+            locked = true
+        }
+        if (lockInitialized && (!settings.lockEnabled || lockPasswordHash == null)) {
+            locked = false
+        }
+    }
+
     val readerActive = session != null && backStack.lastOrNull() is AppRoute.Reader
     CompositionLocalProvider(LocalTitleTranslationService provides titleTranslationService) {
         KicaFluentTheme(
@@ -120,6 +154,12 @@ fun KicaApp(
             Box(
                 contentModifier,
             ) {
+                if (locked && lockPasswordHash != null) {
+                    LockScreen(
+                        passwordHash = lockPasswordHash,
+                        onUnlock = { locked = false },
+                    )
+                } else {
                 if (session == null) {
                     LoginScreen(
                         onLogin = { email, password, onResult ->
@@ -172,6 +212,7 @@ fun KicaApp(
                             content = routeContent,
                         )
                     }
+                }
                 }
             }
         }

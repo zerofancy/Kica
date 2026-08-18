@@ -92,4 +92,16 @@
     <string name="confirm">确认</string>
     <string name="offline_message">网络不可用，正在显示缓存内容</string>
     <string name="back">返回</string>
+    <string name="lock_screen">锁屏密码</string>
+    <string name="lock_screen_description">开启后，打开应用或从后台返回时需要输入密码</string>
+    <string name="lock_enable">启用锁屏密码</string>
+    <string name="lock_set_password">设置密码</string>
+    <string name="lock_change_password">修改密码</string>
+    <string name="lock_password">锁屏密码</string>
+    <string name="lock_password_confirm">确认密码</string>
+    <string name="lock_password_mismatch">两次输入的密码不一致</string>
+    <string name="lock_password_too_short">密码至少需要 4 位</string>
+    <string name="lock_password_incorrect">密码错误</string>
+    <string name="lock_unlock">解锁</string>
+    <string name="lock_disabled">未设置</string>
 </resources>
