@@ -84,6 +84,7 @@ fun KicaApp(
     var backgroundSince by remember { mutableLongStateOf(0L) }
     var lockInitialized by remember { mutableStateOf(false) }
     val lockPasswordHash = settings.lockPasswordHash
+    val lockPatternHash = settings.lockPatternHash
     val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
     val navigateBack = {
         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
@@ -110,14 +111,16 @@ fun KicaApp(
         }
     }
 
+    val hasPassword = lockPasswordHash != null || lockPatternHash != null
+
     PlatformLifecycleObserver(
         onBackground = {
-            if (settings.lockEnabled && lockPasswordHash != null) {
+            if (settings.lockEnabled && hasPassword) {
                 backgroundSince = Clock.System.now().toEpochMilliseconds()
             }
         },
         onForeground = {
-            if (settings.lockEnabled && lockPasswordHash != null) {
+            if (settings.lockEnabled && hasPassword) {
                 if (backgroundSince > 0L && Clock.System.now().toEpochMilliseconds() - backgroundSince >= 3_000L) {
                     locked = true
                 }
@@ -126,12 +129,12 @@ fun KicaApp(
         },
     )
 
-    LaunchedEffect(settings.lockEnabled, lockPasswordHash) {
-        if (!lockInitialized && settings.lockEnabled && lockPasswordHash != null) {
+    LaunchedEffect(settings.lockEnabled, lockPasswordHash, lockPatternHash) {
+        if (!lockInitialized && settings.lockEnabled && hasPassword) {
             lockInitialized = true
             locked = true
         }
-        if (lockInitialized && (!settings.lockEnabled || lockPasswordHash == null)) {
+        if (lockInitialized && (!settings.lockEnabled || !hasPassword)) {
             locked = false
         }
     }
@@ -157,6 +160,11 @@ fun KicaApp(
                 if (locked && lockPasswordHash != null) {
                     LockScreen(
                         passwordHash = lockPasswordHash,
+                        onUnlock = { locked = false },
+                    )
+                } else if (locked && lockPatternHash != null) {
+                    PatternLockScreen(
+                        patternHash = lockPatternHash,
                         onUnlock = { locked = false },
                     )
                 } else {

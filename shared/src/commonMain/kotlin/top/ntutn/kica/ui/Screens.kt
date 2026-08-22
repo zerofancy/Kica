@@ -153,6 +153,10 @@ import top.ntutn.kica.resources.lock_screen
 import top.ntutn.kica.resources.lock_screen_description
 import top.ntutn.kica.resources.lock_set_password
 import top.ntutn.kica.resources.lock_change_password
+import top.ntutn.kica.resources.lock_change_pattern
+import top.ntutn.kica.resources.lock_clear_password
+import top.ntutn.kica.resources.lock_clear_password_confirm
+import top.ntutn.kica.resources.lock_set_pattern
 import top.ntutn.kica.resources.ongoing
 import top.ntutn.kica.resources.password
 import top.ntutn.kica.resources.pause
@@ -1673,6 +1677,7 @@ private fun SettingsScreen(
     var exportLocation by remember { mutableStateOf<String?>(null) }
     var showModelConfirmation by remember { mutableStateOf(false) }
     var showLockDialog by remember { mutableStateOf(false) }
+    var showClearLockDialog by remember { mutableStateOf(false) }
     val settingsScrollState = rememberScrollState()
     val proxyModeScrollState = rememberScrollState()
     val translationBusy = translationState is TitleTranslationState.Downloading ||
@@ -1720,7 +1725,8 @@ private fun SettingsScreen(
             Switcher(
                 checked = settingsValue.lockEnabled,
                 onCheckStateChange = { enabled ->
-                    if (enabled && settingsValue.lockPasswordHash == null) {
+                    val hasAnyPassword = settingsValue.lockPasswordHash != null || settingsValue.lockPatternHash != null
+                    if (enabled && !hasAnyPassword) {
                         showLockDialog = true
                     } else if (enabled) {
                         scope.launch {
@@ -1733,15 +1739,39 @@ private fun SettingsScreen(
                     }
                 },
             )
-            FluentTextButton(
-                onClick = { showLockDialog = true },
-            ) {
-                Text(
-                    stringResource(
-                        if (settingsValue.lockPasswordHash == null) Res.string.lock_set_password
-                        else Res.string.lock_change_password,
-                    ),
-                )
+            val hasPassword = settingsValue.lockPasswordHash != null || settingsValue.lockPatternHash != null
+            if (hasPassword) {
+                FluentTextButton(
+                    onClick = { showLockDialog = true },
+                ) {
+                    Text(
+                        stringResource(
+                            if (platformServices.isDesktop) Res.string.lock_change_password
+                            else Res.string.lock_change_pattern,
+                        ),
+                    )
+                }
+            } else {
+                FluentTextButton(
+                    onClick = { showLockDialog = true },
+                ) {
+                    Text(
+                        stringResource(
+                            if (platformServices.isDesktop) Res.string.lock_set_password
+                            else Res.string.lock_set_pattern,
+                        ),
+                    )
+                }
+            }
+            if (hasPassword) {
+                FluentTextButton(
+                    onClick = { showClearLockDialog = true },
+                ) {
+                    Text(
+                        stringResource(Res.string.lock_clear_password),
+                        color = FluentTheme.colors.system.critical,
+                    )
+                }
             }
         }
         if (!platformServices.isDesktop) {
@@ -1937,17 +1967,77 @@ private fun SettingsScreen(
         )
     }
     if (showLockDialog) {
-        LockSettingsDialog(
-            onConfirm = { password ->
-                showLockDialog = false
-                scope.launch {
-                    library.updateSettings(
-                        settingsValue.copy(lockEnabled = true, lockPasswordHash = sha256(password)),
+        if (platformServices.isDesktop) {
+            LockSettingsDialog(
+                onConfirm = { password ->
+                    showLockDialog = false
+                    scope.launch {
+                        library.updateSettings(
+                            settingsValue.copy(
+                                lockEnabled = true,
+                                lockPasswordHash = sha256(password),
+                                lockPatternHash = null,
+                            ),
+                        )
+                    }
+                },
+                onDismiss = { showLockDialog = false },
+            )
+        } else {
+            PatternLockSettingsDialog(
+                onConfirm = { pattern ->
+                    showLockDialog = false
+                    scope.launch {
+                        library.updateSettings(
+                            settingsValue.copy(
+                                lockEnabled = true,
+                                lockPatternHash = sha256(pattern),
+                                lockPasswordHash = null,
+                            ),
+                        )
+                    }
+                },
+                onDismiss = { showLockDialog = false },
+            )
+        }
+    }
+    if (showClearLockDialog) {
+        Dialog(onDismissRequest = { showClearLockDialog = false }) {
+            PlatformBackHandler(enabled = true, onBack = { showClearLockDialog = false })
+            FluentCard(Modifier.width(360.dp)) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        stringResource(Res.string.lock_clear_password_confirm),
+                        style = FluentTheme.typography.body,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        FluentTextButton(onClick = { showClearLockDialog = false }) {
+                            Text(stringResource(Res.string.cancel))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        FluentPrimaryButton(
+                            onClick = {
+                                showClearLockDialog = false
+                                scope.launch {
+                                    library.updateSettings(
+                                        settingsValue.copy(
+                                            lockEnabled = false,
+                                            lockPasswordHash = null,
+                                            lockPatternHash = null,
+                                        ),
+                                    )
+                                }
+                            },
+                        ) {
+                            Text(stringResource(Res.string.confirm))
+                        }
+                    }
                 }
-            },
-            onDismiss = { showLockDialog = false },
-        )
+            }
+        }
     }
 }
 

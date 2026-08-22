@@ -163,6 +163,7 @@ data class AppSettings(
     val network: NetworkSettings = NetworkSettings(),
     val lockEnabled: Boolean = false,
     val lockPasswordHash: String? = null,
+    val lockPatternHash: String? = null,
 )
 
 sealed interface LoadState<out T> {
