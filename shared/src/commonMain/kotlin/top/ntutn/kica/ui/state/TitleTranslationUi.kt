@@ -1,4 +1,4 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.state
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -7,6 +7,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
 import top.ntutn.kica.data.TitleTranslationService
 import top.ntutn.kica.data.TitleTranslationState
+
 
 internal val LocalTitleTranslationService = staticCompositionLocalOf<TitleTranslationService?> { null }
 

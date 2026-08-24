@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
+
 @Composable
 internal expect fun PlatformHorizontalScrollbar(
     state: LazyListState,

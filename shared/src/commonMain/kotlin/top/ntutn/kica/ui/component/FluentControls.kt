@@ -1,4 +1,4 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.component
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +19,8 @@ import io.github.composefluent.component.ProgressRing
 import io.github.composefluent.component.SubtleButton
 import io.github.composefluent.component.TextField
 import io.github.composefluent.surface.Card
+import top.ntutn.kica.ui.progress
+
 
 /**
  * Kica 使用的 Fluent 控件适配层。

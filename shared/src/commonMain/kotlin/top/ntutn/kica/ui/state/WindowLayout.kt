@@ -1,4 +1,7 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.state
+
+
+
 
 enum class WindowLayout {
     PHONE,

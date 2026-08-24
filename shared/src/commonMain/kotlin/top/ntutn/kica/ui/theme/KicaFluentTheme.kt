@@ -1,4 +1,4 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -9,6 +9,8 @@ import io.github.composefluent.FluentTheme
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import top.ntutn.kica.model.ThemePreference
+import top.ntutn.kica.ui.PlatformSystemBars
+import top.ntutn.kica.ui.PlatformCompatibleTextContextMenu
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable

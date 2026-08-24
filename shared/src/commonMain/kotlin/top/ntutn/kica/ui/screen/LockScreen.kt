@@ -1,13 +1,13 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,8 +35,12 @@ import top.ntutn.kica.resources.lock_password_mismatch
 import top.ntutn.kica.resources.lock_password_too_short
 import top.ntutn.kica.resources.lock_set_password
 import top.ntutn.kica.resources.lock_unlock
-
-@Composable
+import top.ntutn.kica.ui.component.FluentCard
+import top.ntutn.kica.ui.component.FluentPrimaryButton
+import top.ntutn.kica.ui.component.FluentProgressRing
+import top.ntutn.kica.ui.component.FluentTextButton
+import top.ntutn.kica.ui.component.FluentTextField
+import top.ntutn.kica.ui.PlatformBackHandler@Composable
 internal fun LockScreen(
     passwordHash: String,
     onUnlock: () -> Unit,

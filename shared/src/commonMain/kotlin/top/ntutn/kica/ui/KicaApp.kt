@@ -10,8 +10,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,6 +53,13 @@ import top.ntutn.kica.resources.history
 import top.ntutn.kica.resources.home
 import top.ntutn.kica.resources.login_failed
 import top.ntutn.kica.resources.settings
+import top.ntutn.kica.ui.screen.LockScreen
+import top.ntutn.kica.ui.screen.PatternLockScreen
+import top.ntutn.kica.ui.state.LocalTitleTranslationService
+import top.ntutn.kica.ui.state.WindowLayout
+import top.ntutn.kica.ui.state.classifyWindow
+import top.ntutn.kica.ui.theme.KicaFluentTheme
+import top.ntutn.kica.ui.PlatformBackHandler
 
 private data class RootDestination(
     val route: AppRoute,

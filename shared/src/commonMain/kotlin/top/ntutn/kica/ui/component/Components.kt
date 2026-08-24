@@ -1,4 +1,4 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +45,8 @@ import top.ntutn.kica.resources.loading
 import top.ntutn.kica.resources.offline_message
 import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.tap_to_retry
+import top.ntutn.kica.ui.state.translatedTitle
+import top.ntutn.kica.ui.PlatformVerticalScrollbar
 
 @Composable
 fun <T> LoadStateContent(

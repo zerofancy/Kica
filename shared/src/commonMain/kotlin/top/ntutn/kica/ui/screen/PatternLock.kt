@@ -1,4 +1,4 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.screen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,6 +36,7 @@ import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.sha256
 import top.ntutn.kica.resources.Res
@@ -45,8 +46,9 @@ import top.ntutn.kica.resources.lock_pattern_again
 import top.ntutn.kica.resources.lock_pattern_incorrect
 import top.ntutn.kica.resources.lock_pattern_mismatch
 import top.ntutn.kica.resources.lock_set_pattern
-import kotlin.time.Duration.Companion.milliseconds
-
+import top.ntutn.kica.ui.component.FluentCard
+import top.ntutn.kica.ui.component.FluentTextButton
+import top.ntutn.kica.ui.PlatformBackHandler
 private const val GRID_SIZE = 3
 private const val DOT_COUNT = GRID_SIZE * GRID_SIZE
 

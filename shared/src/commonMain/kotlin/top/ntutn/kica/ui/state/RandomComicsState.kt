@@ -1,6 +1,7 @@
-package top.ntutn.kica.ui
+package top.ntutn.kica.ui.state
 
 import top.ntutn.kica.model.ComicSummary
+
 
 internal data class RandomComicsUiState(
     val items: List<ComicSummary>? = null,
