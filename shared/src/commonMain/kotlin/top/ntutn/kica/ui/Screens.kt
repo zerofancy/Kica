@@ -22,7 +22,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
-import io.github.composefluent.icons.regular.Search
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -36,12 +35,8 @@ import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
 import top.ntutn.kica.resources.Res
-import top.ntutn.kica.resources.author
-import top.ntutn.kica.resources.categories
-import top.ntutn.kica.resources.downloads
 import top.ntutn.kica.resources.email
 import top.ntutn.kica.resources.enter_credentials
-import top.ntutn.kica.resources.finished
 import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.logging_in
 import top.ntutn.kica.resources.login
@@ -168,14 +163,19 @@ internal fun RouteContent(
         AppRoute.Discover -> DiscoverScreen(picaRepository, libraryRepository, onNavigate)
         AppRoute.RandomComics -> RandomComicsScreen(
             loader = randomComicsLoader,
+            library = libraryRepository,
             onBack = onBack,
         ) { onNavigate(AppRoute.Detail(it.id)) }
-        AppRoute.Favorites -> FavoritesScreen(picaRepository) { onNavigate(AppRoute.Detail(it.id)) }
+        AppRoute.Favorites -> FavoritesScreen(
+            repository = picaRepository,
+            library = libraryRepository,
+        ) { onNavigate(AppRoute.Detail(it.id)) }
         AppRoute.History -> HistoryScreen(libraryRepository) { onNavigate(AppRoute.Detail(it.comic.id)) }
-        AppRoute.Downloads -> DownloadsScreen(downloadCoordinator)
+        AppRoute.Downloads -> DownloadsScreen(downloadCoordinator, libraryRepository)
         AppRoute.Settings -> SettingsScreen(libraryRepository, platformServices, onLogout)
         is AppRoute.Search -> SearchScreen(
             repository = picaRepository,
+            library = libraryRepository,
             initialQuery = route.initialQuery,
             initialCategory = route.category,
             onBack = onBack,

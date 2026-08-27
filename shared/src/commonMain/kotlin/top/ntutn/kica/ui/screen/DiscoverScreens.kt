@@ -1,39 +1,50 @@
 package top.ntutn.kica.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Icon
@@ -41,17 +52,26 @@ import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowSync
 import io.github.composefluent.icons.regular.Search
+import io.github.composefluent.icons.regular.Settings
 import io.github.composefluent.icons.regular.Tag
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.model.AppRoute
+import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.model.RankPeriod
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.categories
+import top.ntutn.kica.resources.category_filter
+import top.ntutn.kica.resources.category_filter_clear
+import top.ntutn.kica.resources.category_filter_description
+import top.ntutn.kica.resources.category_filter_done
+import top.ntutn.kica.resources.category_filter_select_all
 import top.ntutn.kica.resources.discover
 import top.ntutn.kica.resources.empty
 import top.ntutn.kica.resources.load_failed
@@ -62,16 +82,22 @@ import top.ntutn.kica.resources.rank_7d
 import top.ntutn.kica.resources.rank_knight
 import top.ntutn.kica.resources.ranking
 import top.ntutn.kica.resources.search
+import top.ntutn.kica.ui.filterBlockedCategories
+import top.ntutn.kica.ui.filterBlockedSummaries
+import top.ntutn.kica.ui.PlatformBackHandler
+import top.ntutn.kica.ui.PlatformVerticalScrollbar
 import top.ntutn.kica.ui.component.ComicCard
 import top.ntutn.kica.ui.component.ErrorCard
 import top.ntutn.kica.ui.component.FluentCard
 import top.ntutn.kica.ui.component.FluentChip
 import top.ntutn.kica.ui.component.FluentIconButton
+import top.ntutn.kica.ui.component.FluentPrimaryButton
 import top.ntutn.kica.ui.component.FluentProgressBar
+import top.ntutn.kica.ui.component.FluentTextButton
 import top.ntutn.kica.ui.component.SectionTitle
-import top.ntutn.kica.ui.component.LoadStateContent
-import top.ntutn.kica.ui.state.RandomComicsUiState
-import top.ntutn.kica.ui.PlatformVerticalScrollbar@Composable
+import androidx.compose.runtime.collectAsState
+
+@Composable
 internal fun DiscoverScreen(
     repository: PicaRepository,
     library: LibraryRepository,
@@ -79,7 +105,10 @@ internal fun DiscoverScreen(
 ) {
     var selected by remember { mutableStateOf(RankPeriod.HOURS_24) }
     var refresh by remember { mutableIntStateOf(0) }
+    var showCategoryFilter by remember { mutableStateOf(false) }
     val loadFailed = stringResource(Res.string.load_failed)
+    val settings by library.settings().collectAsState(initial = AppSettings())
+    val blocked = settings.blockedCategories
     val categoriesState by produceState<LoadState<List<ComicCategory>>>(LoadState.Loading, refresh) {
         val cached = runCatching { library.cachedCategories() }.getOrNull()
         if (cached != null) {
@@ -119,14 +148,22 @@ internal fun DiscoverScreen(
                 }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(stringResource(Res.string.categories), style = FluentTheme.typography.subtitle)
+                SectionTitle(stringResource(Res.string.categories)) {
+                    FluentIconButton(onClick = { showCategoryFilter = true }) {
+                        Icon(
+                            imageVector = Icons.Regular.Settings,
+                            contentDescription = stringResource(Res.string.category_filter),
+                        )
+                    }
+                }
             }
             item(key = "random-comics-entry") {
                 RandomComicsEntryCard(onClick = { onNavigate(AppRoute.RandomComics) })
             }
             when (val categoryValue = categoriesState) {
                 is LoadState.Data -> {
-                    if (categoryValue.value.isEmpty()) {
+                    val visible = categoryValue.value.filterBlockedCategories(blocked)
+                    if (visible.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(
                                 stringResource(Res.string.empty),
@@ -135,7 +172,7 @@ internal fun DiscoverScreen(
                         }
                     } else {
                         gridItems(
-                            items = categoryValue.value,
+                            items = visible,
                             key = { "category:${it.id.ifBlank { it.title }}" },
                         ) { category ->
                             CategoryCoverCard(
@@ -181,7 +218,8 @@ internal fun DiscoverScreen(
             }
             when (val rankingValue = rankingState) {
                 is LoadState.Data -> {
-                    if (rankingValue.value.isEmpty()) {
+                    val visible = rankingValue.value.filterBlockedSummaries(blocked)
+                    if (visible.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(
                                 stringResource(Res.string.empty),
@@ -189,7 +227,7 @@ internal fun DiscoverScreen(
                             )
                         }
                     } else {
-                        gridItems(rankingValue.value, key = { "ranking:${it.id}" }) { comic ->
+                        gridItems(visible, key = { "ranking:${it.id}" }) { comic ->
                             ComicCard(comic) { onNavigate(AppRoute.Detail(it.id)) }
                         }
                     }
@@ -203,6 +241,123 @@ internal fun DiscoverScreen(
             }
         }
         PlatformVerticalScrollbar(gridState, Modifier.align(Alignment.CenterEnd))
+    }
+
+    if (showCategoryFilter) {
+        CategoryFilterDialog(
+            allCategories = (categoriesState as? LoadState.Data)?.value.orEmpty(),
+            library = library,
+            onDismiss = { showCategoryFilter = false },
+        )
+    }
+}
+
+@Composable
+private fun CategoryFilterDialog(
+    allCategories: List<ComicCategory>,
+    library: LibraryRepository,
+    onDismiss: () -> Unit,
+) {
+    val settingsSnapshot by library.settings().collectAsState(initial = AppSettings())
+    val scope = rememberCoroutineScope()
+    val empty = stringResource(Res.string.empty)
+    val systemDark = isSystemInDarkTheme()
+    val useDarkTheme = remember(settingsSnapshot.theme, systemDark) {
+        when (settingsSnapshot.theme) {
+            top.ntutn.kica.model.ThemePreference.LIGHT -> false
+            top.ntutn.kica.model.ThemePreference.DARK -> true
+            top.ntutn.kica.model.ThemePreference.SYSTEM -> systemDark
+        }
+    }
+    val panelBackground = if (useDarkTheme) Color(0xFF202020) else Color(0xFFFAFAFA)
+    val panelBorder = if (useDarkTheme) Color(0xFF4A4A4A) else Color(0xFFC8C8C8)
+    Dialog(onDismissRequest = onDismiss) {
+        PlatformBackHandler(enabled = true, onBack = onDismiss)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .background(
+                    color = panelBackground,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                .border(
+                    width = 1.dp,
+                    color = panelBorder,
+                    shape = RoundedCornerShape(8.dp),
+                ),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(stringResource(Res.string.category_filter), style = FluentTheme.typography.subtitle)
+                Text(
+                    stringResource(Res.string.category_filter_description),
+                    style = FluentTheme.typography.caption,
+                    color = FluentTheme.colors.text.text.secondary,
+                )
+                val updateBlocked: (Set<String>) -> Unit = { next ->
+                    scope.launch {
+                        val latest = library.settings().first()
+                        library.updateSettings(latest.copy(blockedCategories = next))
+                    }
+                }
+                val scrollState = rememberScrollState()
+                Box(Modifier.fillMaxWidth().height(360.dp)) {
+                    if (allCategories.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(empty, color = FluentTheme.colors.text.text.secondary)
+                        }
+                    } else {
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .padding(end = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            allCategories.forEach { category ->
+                                val selected = category.title in settingsSnapshot.blockedCategories
+                                FluentChip(
+                                    selected = selected,
+                                    onClick = {
+                                        val next = settingsSnapshot.blockedCategories.toMutableSet()
+                                        if (selected) next.remove(category.title)
+                                        else next.add(category.title)
+                                        updateBlocked(next)
+                                    },
+                                    label = { Text(category.title) },
+                                )
+                            }
+                        }
+                        PlatformVerticalScrollbar(
+                            state = scrollState,
+                            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FluentTextButton(
+                        onClick = {
+                            updateBlocked(allCategories.map { it.title }.toSet())
+                        },
+                    ) { Text(stringResource(Res.string.category_filter_select_all)) }
+                    FluentTextButton(
+                        onClick = { updateBlocked(emptySet()) },
+                    ) { Text(stringResource(Res.string.category_filter_clear)) }
+                    Spacer(Modifier.weight(1f))
+                    FluentPrimaryButton(onClick = onDismiss) {
+                        Text(stringResource(Res.string.category_filter_done))
+                    }
+                }
+            }
+        }
     }
 }
 

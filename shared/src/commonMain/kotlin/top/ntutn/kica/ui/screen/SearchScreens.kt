@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +27,9 @@ import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowLeft
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
+import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
+import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.resources.Res
@@ -36,6 +38,7 @@ import top.ntutn.kica.resources.categories
 import top.ntutn.kica.resources.search
 import top.ntutn.kica.resources.search_failed
 import top.ntutn.kica.resources.search_hint
+import top.ntutn.kica.ui.filterBlockedSummaries
 import top.ntutn.kica.ui.component.ComicGrid
 import top.ntutn.kica.ui.component.FluentChip
 import top.ntutn.kica.ui.component.FluentIconButton
@@ -48,6 +51,7 @@ import top.ntutn.kica.ui.component.LoadStateContent
 @Composable
 internal fun SearchScreen(
     repository: PicaRepository,
+    library: LibraryRepository,
     initialQuery: String,
     initialCategory: String?,
     onBack: () -> Unit,
@@ -73,6 +77,8 @@ internal fun SearchScreen(
     var loadingMore by remember { mutableStateOf(false) }
     var loadMoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val settings by library.settings().collectAsState(initial = AppSettings())
+    val blocked = settings.blockedCategories
 
     LaunchedEffect(criteria, refresh) {
         val current = criteria
@@ -94,7 +100,7 @@ internal fun SearchScreen(
                 onSuccess = { result ->
                     loadedPage = result.page
                     totalPages = result.totalPages
-                    LoadState.Data(result.items)
+                    LoadState.Data(result.items.filterBlockedSummaries(blocked))
                 },
                 onFailure = { LoadState.Error(it.message ?: searchFailed) },
             )
@@ -119,7 +125,10 @@ internal fun SearchScreen(
             result.fold(
                 onSuccess = { page ->
                     val existing = (state as? LoadState.Data)?.value.orEmpty()
-                    state = LoadState.Data((existing + page.items).distinctBy(ComicSummary::id))
+                    val merged = (existing + page.items)
+                        .distinctBy(ComicSummary::id)
+                        .filterBlockedSummaries(blocked)
+                    state = LoadState.Data(merged)
                     loadedPage = maxOf(nextPage, page.page)
                     totalPages = page.totalPages
                 },

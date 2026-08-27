@@ -112,4 +112,9 @@
     <string name="lock_pattern_again">再次绘制以确认</string>
     <string name="lock_pattern_mismatch">两次图案不一致，请重新设置</string>
     <string name="lock_pattern_incorrect">图案错误</string>
+    <string name="category_filter">分类筛选</string>
+    <string name="category_filter_description">勾选需要屏蔽的分类；对应分类卡片、漫画列表、排行榜、推荐、搜索、收藏、历史、下载均不再显示。</string>
+    <string name="category_filter_select_all">全选</string>
+    <string name="category_filter_clear">清空</string>
+    <string name="category_filter_done">完成</string>
 </resources>

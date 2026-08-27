@@ -164,6 +164,7 @@ data class AppSettings(
     val lockEnabled: Boolean = false,
     val lockPasswordHash: String? = null,
     val lockPatternHash: String? = null,
+    val blockedCategories: Set<String> = emptySet(),
 )
 
 sealed interface LoadState<out T> {

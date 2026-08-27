@@ -37,6 +37,7 @@ import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.DownloadCoordinator
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
+import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.DownloadStatus
 import top.ntutn.kica.model.HistoryEntry
@@ -49,6 +50,7 @@ import top.ntutn.kica.resources.history
 import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.pause
 import top.ntutn.kica.resources.resume
+import top.ntutn.kica.ui.filterBlockedSummaries
 import top.ntutn.kica.ui.component.ComicGrid
 import top.ntutn.kica.ui.component.EmptyContent
 import top.ntutn.kica.ui.component.FluentCard
@@ -58,8 +60,14 @@ import top.ntutn.kica.ui.component.SectionTitle
 import top.ntutn.kica.ui.progress
 import top.ntutn.kica.ui.state.translatedTitle
 import top.ntutn.kica.ui.component.LoadStateContent
-import top.ntutn.kica.ui.PlatformVerticalScrollbar@Composable
-internal fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSummary) -> Unit) {
+import top.ntutn.kica.ui.PlatformVerticalScrollbar
+
+@Composable
+internal fun FavoritesScreen(
+    repository: PicaRepository,
+    library: LibraryRepository,
+    onComicClick: (ComicSummary) -> Unit,
+) {
     var refresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
     var state by remember { mutableStateOf<LoadState<List<ComicSummary>>>(LoadState.Loading) }
@@ -68,6 +76,8 @@ internal fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSum
     var loadingMore by remember { mutableStateOf(false) }
     var loadMoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val settings by library.settings().collectAsState(initial = AppSettings())
+    val blocked = settings.blockedCategories
 
     LaunchedEffect(refresh) {
         loadedPage = 0
@@ -79,7 +89,7 @@ internal fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSum
             onSuccess = { result ->
                 loadedPage = result.page
                 totalPages = result.totalPages
-                LoadState.Data(result.items)
+                LoadState.Data(result.items.filterBlockedSummaries(blocked))
             },
             onFailure = { LoadState.Error(it.message ?: loadFailed) },
         )
@@ -97,7 +107,10 @@ internal fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSum
             result.fold(
                 onSuccess = { page ->
                     val existing = (state as? LoadState.Data)?.value.orEmpty()
-                    state = LoadState.Data((existing + page.items).distinctBy(ComicSummary::id))
+                    val merged = (existing + page.items)
+                        .distinctBy(ComicSummary::id)
+                        .filterBlockedSummaries(blocked)
+                    state = LoadState.Data(merged)
                     loadedPage = maxOf(nextPage, page.page)
                     totalPages = page.totalPages
                 },
@@ -128,10 +141,17 @@ internal fun FavoritesScreen(repository: PicaRepository, onComicClick: (ComicSum
 @Composable
 internal fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -> Unit) {
     val historyItems by library.history().collectAsState(initial = emptyList())
+    val settings by library.settings().collectAsState(initial = AppSettings())
+    val blocked = settings.blockedCategories
     val listState = rememberLazyListState()
+    val visible = if (blocked.isEmpty()) {
+        historyItems
+    } else {
+        historyItems.filterNot { it.comic.categories.any { category -> category in blocked } }
+    }
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.history))
-        if (historyItems.isEmpty()) {
+        if (visible.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
             Box(Modifier.weight(1f)) {
@@ -140,7 +160,7 @@ internal fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(historyItems, key = { it.comic.id }) { entry ->
+                    items(visible, key = { it.comic.id }) { entry ->
                         val displayTitle = translatedTitle(entry.comic.title)
                         FluentCard(
                             modifier = Modifier.fillMaxWidth(),
@@ -172,13 +192,23 @@ internal fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -
 }
 
 @Composable
-internal fun DownloadsScreen(coordinator: DownloadCoordinator) {
+internal fun DownloadsScreen(
+    coordinator: DownloadCoordinator,
+    library: LibraryRepository,
+) {
     val tasks by coordinator.tasks.collectAsState()
+    val settings by library.settings().collectAsState(initial = AppSettings())
+    val blocked = settings.blockedCategories
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val visible = if (blocked.isEmpty()) {
+        tasks
+    } else {
+        tasks.filterNot { it.comic.categories.any { category -> category in blocked } }
+    }
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.downloads))
-        if (tasks.isEmpty()) {
+        if (visible.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
             Box(Modifier.weight(1f)) {
@@ -187,7 +217,7 @@ internal fun DownloadsScreen(coordinator: DownloadCoordinator) {
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(tasks, key = { it.id }) { task ->
+                    items(visible, key = { it.id }) { task ->
                         val displayTitle = translatedTitle(task.comic.title)
                         FluentCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
