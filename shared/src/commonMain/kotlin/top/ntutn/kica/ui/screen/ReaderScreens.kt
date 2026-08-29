@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
@@ -56,6 +58,7 @@ import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowExpand
 import io.github.composefluent.icons.regular.ArrowLeft
 import io.github.composefluent.icons.regular.Maximize
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -64,8 +67,8 @@ import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
-import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.ComicDetail
+import top.ntutn.kica.model.Episode
 import top.ntutn.kica.model.HistoryEntry
 import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.model.PageRef
@@ -110,29 +113,28 @@ internal fun ReaderScreen(
     var fit by remember { mutableStateOf(PageFit.WIDTH) }
     var controlsVisible by remember { mutableStateOf(true) }
     val loadFailed = stringResource(Res.string.load_failed)
-    val restoredState by produceState(false to null as ReadingProgress?, comicId, episodeId) {
-        value = true to library.readingProgress(comicId, episodeId)
+    var currentEpisodeId by remember { mutableStateOf(episodeId) }
+    var pendingInitialPage by remember { mutableStateOf<Int?>(null) }
+    val restoredState by produceState(false to null as ReadingProgress?, comicId, currentEpisodeId) {
+        value = true to library.readingProgress(comicId, currentEpisodeId)
     }
     val progressLoaded = restoredState.first
     val restoredProgress = restoredState.second
-    val metadata by produceState<Pair<ComicSummary, String>?>(null, comicId, episodeId) {
-        value = try {
-            val detail = repository.comic(comicId)
-            val episodeTitle = repository.episodes(comicId)
-                .firstOrNull { it.id == episodeId }
-                ?.title
-                ?: episodeId
-            detail.toSummary() to episodeTitle
-        } catch (_: Throwable) {
-            null
-        }
+    val comic by produceState<ComicDetail?>(null, comicId) {
+        value = runCatching { repository.comic(comicId) }.getOrNull()
     }
-    val pagesState by produceState<LoadState<List<PageRef>>>(LoadState.Loading, comicId, episodeId, refresh) {
-        value = runCatching { repository.pages(comicId, episodeId) }.fold(
+    val episodes by produceState<List<Episode>>(emptyList(), comicId) {
+        value = runCatching { repository.episodes(comicId) }.getOrDefault(emptyList())
+    }
+    val episodeTitle by remember(episodes, currentEpisodeId) {
+        mutableStateOf(episodes.firstOrNull { it.id == currentEpisodeId }?.title ?: currentEpisodeId)
+    }
+    val pagesState by produceState<LoadState<List<PageRef>>>(LoadState.Loading, comicId, currentEpisodeId, refresh) {
+        value = runCatching { repository.pages(comicId, currentEpisodeId) }.fold(
             onSuccess = { LoadState.Data(it) },
             onFailure = { error ->
                 val task = library.downloads().first()
-                    .firstOrNull { it.comic.id == comicId && it.episode.id == episodeId }
+                    .firstOrNull { it.comic.id == comicId && it.episode.id == currentEpisodeId }
                 val offline = task?.let {
                     platformServices.fileLocationProvider.downloadedPages(it)
                 }.orEmpty()
@@ -145,16 +147,28 @@ internal fun ReaderScreen(
         )
     }
     val scope = rememberCoroutineScope()
-    val initialPage = restoredProgress?.pageIndex ?: 0
+    val currentIndex = episodes.indexOfFirst { it.id == currentEpisodeId }
+    val nextEpisode = episodes.getOrNull(currentIndex + 1)
+    val prevEpisode = episodes.getOrNull(currentIndex - 1)
+    val canNext = nextEpisode != null
+    val canPrev = prevEpisode != null
+    val onChangeChapter: (Boolean) -> Unit = { forward ->
+        val target = if (forward) nextEpisode else prevEpisode
+        if (target != null) {
+            pendingInitialPage = if (forward) 0 else Int.MAX_VALUE
+            currentEpisodeId = target.id
+        }
+    }
+    val initialPage = pendingInitialPage ?: restoredProgress?.pageIndex ?: 0
     val savePage: (Int) -> Unit = { page ->
         scope.launch {
-            val saved = progress(comicId, episodeId, page, mode)
+            val saved = progress(comicId, currentEpisodeId, page, mode)
             library.saveProgress(saved)
-            metadata?.let { (comic, episodeTitle) ->
+            comic?.toSummary()?.let { summary ->
                 library.addHistory(
                     HistoryEntry(
-                        comic = comic,
-                        episodeId = episodeId,
+                        comic = summary,
+                        episodeId = currentEpisodeId,
                         episodeTitle = episodeTitle,
                         pageIndex = page,
                         updatedAtEpochMillis = saved.updatedAtEpochMillis,
@@ -164,7 +178,9 @@ internal fun ReaderScreen(
         }
     }
     LaunchedEffect(restoredProgress) {
-        restoredProgress?.let { mode = it.mode }
+        if (pendingInitialPage == null) {
+            restoredProgress?.let { mode = it.mode }
+        }
     }
 
     val toolbarScrollState = rememberScrollState()
@@ -221,10 +237,10 @@ internal fun ReaderScreen(
                 when {
                     !progressLoaded -> FluentProgressRing(Modifier.align(Alignment.Center))
                     pages.isEmpty() -> EmptyContent()
-                    mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage)
+                    mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter)
                     mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT ->
-                        DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage)
-                    else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage)
+                        DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter)
+                    else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter)
                 }
             }
             if (!controlsVisible) {
@@ -265,6 +281,9 @@ internal fun VerticalReader(
     initialPage: Int,
     fit: PageFit,
     onPageChanged: (Int) -> Unit,
+    canNext: Boolean,
+    canPrev: Boolean,
+    onChangeChapter: (Boolean) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(initialPage, pages.size) {
@@ -273,7 +292,24 @@ internal fun VerticalReader(
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect(onPageChanged)
     }
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .wheelChapterOverflow(
+                atStart = { !listState.canScrollBackward },
+                atEnd = { !listState.canScrollForward },
+                onNext = { if (canNext) onChangeChapter(true) },
+                onPrev = { if (canPrev) onChangeChapter(false) },
+            )
+            .touchChapterOverflow(
+                atStart = { !listState.canScrollBackward },
+                atEnd = { !listState.canScrollForward },
+                isHorizontal = false,
+                forwardSign = -1,
+                onNext = { if (canNext) onChangeChapter(true) },
+                onPrev = { if (canPrev) onChangeChapter(false) },
+            ),
+    ) {
         PagePreloader(pages, { listState.firstVisibleItemIndex }, fit)
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(pages, key = { it.index }) { page ->
@@ -292,9 +328,26 @@ internal fun PagedReader(
     reverse: Boolean,
     fit: PageFit,
     onPageChanged: (Int) -> Unit,
+    canNext: Boolean,
+    canPrev: Boolean,
+    onChangeChapter: (Boolean) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { pages.size })
-    val pagerModifier = Modifier.fillMaxSize().mouseWheelPaging(pagerState)
+    val pagerModifier = Modifier
+        .fillMaxSize()
+        .mouseWheelPaging(
+            pagerState,
+            onOverflowForward = { if (canNext) onChangeChapter(true) },
+            onOverflowBackward = { if (canPrev) onChangeChapter(false) },
+        )
+        .touchChapterOverflow(
+            atStart = { pagerState.currentPage == 0 },
+            atEnd = { pagerState.currentPage >= pages.size - 1 },
+            isHorizontal = true,
+            forwardSign = if (reverse) 1 else -1,
+            onNext = { if (canNext) onChangeChapter(true) },
+            onPrev = { if (canPrev) onChangeChapter(false) },
+        )
     LaunchedEffect(initialPage, pages.size) {
         if (pages.isNotEmpty()) pagerState.scrollToPage(initialPage.coerceIn(pages.indices))
     }
@@ -319,10 +372,27 @@ internal fun DoubleReader(
     reverse: Boolean,
     fit: PageFit,
     onPageChanged: (Int) -> Unit,
+    canNext: Boolean,
+    canPrev: Boolean,
+    onChangeChapter: (Boolean) -> Unit,
 ) {
     val pairs = remember(pages) { pages.chunked(2) }
     val pagerState = rememberPagerState(pageCount = { pairs.size })
-    val pagerModifier = Modifier.fillMaxSize().mouseWheelPaging(pagerState)
+    val pagerModifier = Modifier
+        .fillMaxSize()
+        .mouseWheelPaging(
+            pagerState,
+            onOverflowForward = { if (canNext) onChangeChapter(true) },
+            onOverflowBackward = { if (canPrev) onChangeChapter(false) },
+        )
+        .touchChapterOverflow(
+            atStart = { pagerState.currentPage == 0 },
+            atEnd = { pagerState.currentPage >= pairs.size - 1 },
+            isHorizontal = true,
+            forwardSign = if (reverse) 1 else -1,
+            onNext = { if (canNext) onChangeChapter(true) },
+            onPrev = { if (canPrev) onChangeChapter(false) },
+        )
     LaunchedEffect(initialPage, pairs.size) {
         if (pairs.isNotEmpty()) pagerState.scrollToPage((initialPage / 2).coerceIn(pairs.indices))
     }
@@ -394,9 +464,16 @@ internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int
 }
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-internal fun Modifier.mouseWheelPaging(state: androidx.compose.foundation.pager.PagerState): Modifier {
+internal fun Modifier.mouseWheelPaging(
+    state: androidx.compose.foundation.pager.PagerState,
+    onOverflowForward: () -> Unit = {},
+    onOverflowBackward: () -> Unit = {},
+): Modifier {
     val scope = rememberCoroutineScope()
     var paging by remember(state) { mutableStateOf(false) }
+    var overflowFired by remember(state) { mutableStateOf(false) }
+    val forwardState = rememberUpdatedState(onOverflowForward)
+    val backwardState = rememberUpdatedState(onOverflowBackward)
     return pointerInput(state, scope) {
         awaitPointerEventScope {
             while (true) {
@@ -419,8 +496,110 @@ internal fun Modifier.mouseWheelPaging(state: androidx.compose.foundation.pager.
                                     paging = false
                                 }
                             }
+                        } else if (!overflowFired) {
+                            overflowFired = true
+                            scope.launch {
+                                delay(OVERFLOW_COOLDOWN_MS)
+                                overflowFired = false
+                            }
+                            if (direction > 0) forwardState.value() else backwardState.value()
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+private const val OVERFLOW_COOLDOWN_MS = 500L
+
+internal const val CHAPTER_OVERFLOW_THRESHOLD_DP = 40
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun Modifier.touchChapterOverflow(
+    atStart: () -> Boolean,
+    atEnd: () -> Boolean,
+    isHorizontal: Boolean,
+    forwardSign: Int,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+): Modifier {
+    val threshold = with(LocalDensity.current) { CHAPTER_OVERFLOW_THRESHOLD_DP.dp.toPx() }
+    val atStartState = rememberUpdatedState(atStart)
+    val atEndState = rememberUpdatedState(atEnd)
+    val onNextState = rememberUpdatedState(onNext)
+    val onPrevState = rememberUpdatedState(onPrev)
+    return pointerInput(threshold, isHorizontal, forwardSign) {
+        awaitPointerEventScope {
+            var total = 0f
+            var fired = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val pressedCount = event.changes.count { it.pressed }
+                if (pressedCount != 1) {
+                    // no drag, release, or multi-touch (zoom) -> reset
+                    total = 0f
+                    fired = false
+                    continue
+                }
+                val change = event.changes.first { it.pressed }
+                val delta = if (isHorizontal) {
+                    change.position.x - change.previousPosition.x
+                } else {
+                    change.position.y - change.previousPosition.y
+                }
+                total += delta
+                if (!fired) {
+                    val projected = total * forwardSign
+                    if (projected > threshold && atEndState.value()) {
+                        onNextState.value()
+                        fired = true
+                    } else if (projected < -threshold && atStartState.value()) {
+                        onPrevState.value()
+                        fired = true
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@Composable
+internal fun Modifier.wheelChapterOverflow(
+    atStart: () -> Boolean,
+    atEnd: () -> Boolean,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+): Modifier {
+    val scope = rememberCoroutineScope()
+    var overflowFired by remember { mutableStateOf(false) }
+    val atStartState = rememberUpdatedState(atStart)
+    val atEndState = rememberUpdatedState(atEnd)
+    val onNextState = rememberUpdatedState(onNext)
+    val onPrevState = rememberUpdatedState(onPrev)
+    return pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type != PointerEventType.Scroll) continue
+                val scroll = event.changes.firstOrNull()?.scrollDelta ?: continue
+                if (scroll.y == 0f || overflowFired) continue
+                if (scroll.y > 0f && atEndState.value()) {
+                    overflowFired = true
+                    scope.launch {
+                        delay(OVERFLOW_COOLDOWN_MS)
+                        overflowFired = false
+                    }
+                    onNextState.value()
+                } else if (scroll.y < 0f && atStartState.value()) {
+                    overflowFired = true
+                    scope.launch {
+                        delay(OVERFLOW_COOLDOWN_MS)
+                        overflowFired = false
+                    }
+                    onPrevState.value()
                 }
             }
         }
