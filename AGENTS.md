@@ -6,3 +6,9 @@
 - 垂直滚动区域使用垂直滚动条，水平滚动区域使用水平滚动条；仅在内容实际可滚动时显示。
 - 新增或修改 `LazyColumn`、`LazyRow`、`LazyVerticalGrid`、`verticalScroll`、`horizontalScroll` 等滚动实现时，必须同步检查并实现桌面端滚动条。
 - 移动端可以继续使用触摸手势，不强制显示滚动条；分页器等具有明确翻页语义的组件不视为普通滚动区域。
+
+## Android FileProvider 路径安全
+
+- `FileProvider` 的路径配置必须遵循最小权限原则，只允许公开业务实际需要共享的具体子目录。
+- 禁止在 `<files-path>`、`<cache-path>`、`<external-files-path>` 等配置中使用 `path="."`，或以其他方式暴露内部文件、缓存、外部应用目录等特殊目录的根目录。
+- 新增文件共享能力时，必须同步检查 `getUriForFile` 的目标位置，并在 `file_paths.xml` 中为该用途配置独立、范围最小的子目录白名单；数据库、凭据、模型及其他敏感文件所在目录不得加入白名单。

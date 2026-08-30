@@ -84,4 +84,6 @@ interface PlatformServices {
     val fileLocationProvider: FileLocationProvider
     suspend fun shareFile(path: String): Boolean
     suspend fun openExternalUrl(url: String): Boolean
+    suspend fun copyImage(page: PageRef): Boolean
+    suspend fun saveImage(page: PageRef): Boolean
 }

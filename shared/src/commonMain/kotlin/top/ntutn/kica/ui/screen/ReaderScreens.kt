@@ -9,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,8 +49,13 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -58,6 +66,7 @@ import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowExpand
 import io.github.composefluent.icons.regular.ArrowLeft
 import io.github.composefluent.icons.regular.Maximize
+import io.github.composefluent.surface.Card
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -75,7 +84,10 @@ import top.ntutn.kica.model.PageRef
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
 import top.ntutn.kica.resources.Res
+import top.ntutn.kica.resources.action_failed
 import top.ntutn.kica.resources.back
+import top.ntutn.kica.resources.copy
+import top.ntutn.kica.resources.copy_success
 import top.ntutn.kica.resources.downloads
 import top.ntutn.kica.resources.episodes
 import top.ntutn.kica.resources.fit_height
@@ -88,15 +100,25 @@ import top.ntutn.kica.resources.reader_ltr
 import top.ntutn.kica.resources.reader_mode
 import top.ntutn.kica.resources.reader_rtl
 import top.ntutn.kica.resources.reader_vertical
+import top.ntutn.kica.resources.save
+import top.ntutn.kica.resources.save_success
+import top.ntutn.kica.ui.PlatformBackHandler
+import top.ntutn.kica.ui.PlatformHorizontalScrollbar
+import top.ntutn.kica.ui.PlatformVerticalScrollbar
 import top.ntutn.kica.ui.component.EmptyContent
 import top.ntutn.kica.ui.component.FluentChip
 import top.ntutn.kica.ui.component.FluentIconButton
 import top.ntutn.kica.ui.component.FluentProgressRing
+import top.ntutn.kica.ui.component.FluentTextButton
+import top.ntutn.kica.ui.component.LoadStateContent
 import top.ntutn.kica.ui.progress
 import top.ntutn.kica.ui.toSummary
-import top.ntutn.kica.ui.PlatformVerticalScrollbar
-import top.ntutn.kica.ui.PlatformHorizontalScrollbar
-import top.ntutn.kica.ui.component.LoadStateContent
+
+internal data class ImageContextMenuState(
+    val page: PageRef,
+    val pageWindowOrigin: IntOffset,
+    val clickLocalOffset: IntOffset,
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -115,6 +137,11 @@ internal fun ReaderScreen(
     val loadFailed = stringResource(Res.string.load_failed)
     var currentEpisodeId by remember { mutableStateOf(episodeId) }
     var pendingInitialPage by remember { mutableStateOf<Int?>(null) }
+    var contextMenu by remember { mutableStateOf<ImageContextMenuState?>(null) }
+    var toast by remember { mutableStateOf<String?>(null) }
+    val copySuccessMsg = stringResource(Res.string.copy_success)
+    val saveSuccessMsg = stringResource(Res.string.save_success)
+    val failedMsg = stringResource(Res.string.action_failed)
     val restoredState by produceState(false to null as ReadingProgress?, comicId, currentEpisodeId) {
         value = true to library.readingProgress(comicId, currentEpisodeId)
     }
@@ -182,6 +209,31 @@ internal fun ReaderScreen(
             restoredProgress?.let { mode = it.mode }
         }
     }
+    LaunchedEffect(toast) {
+        val msg = toast
+        if (!msg.isNullOrBlank()) {
+            delay(2_000L)
+            if (toast == msg) toast = null
+        }
+    }
+
+    val dismissMenu: () -> Unit = { contextMenu = null }
+    val handleCopy: (PageRef) -> Unit = { page ->
+        scope.launch {
+            val ok = runCatching { platformServices.copyImage(page) }.getOrDefault(false)
+            toast = if (ok) copySuccessMsg else failedMsg
+        }
+    }
+    val handleSave: (PageRef) -> Unit = { page ->
+        scope.launch {
+            val ok = runCatching { platformServices.saveImage(page) }.getOrDefault(false)
+            toast = if (ok) saveSuccessMsg else failedMsg
+        }
+    }
+    val onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit = { page, origin, offset ->
+        contextMenu = ImageContextMenuState(page, origin, offset)
+    }
+    PlatformBackHandler(enabled = contextMenu != null, onBack = dismissMenu)
 
     val toolbarScrollState = rememberScrollState()
     Column(Modifier.fillMaxSize().background(Color.Black)) {
@@ -237,10 +289,10 @@ internal fun ReaderScreen(
                 when {
                     !progressLoaded -> FluentProgressRing(Modifier.align(Alignment.Center))
                     pages.isEmpty() -> EmptyContent()
-                    mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter)
+                    mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
                     mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT ->
-                        DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter)
-                    else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter)
+                        DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
+                    else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
                 }
             }
             if (!controlsVisible) {
@@ -251,6 +303,62 @@ internal fun ReaderScreen(
                         .statusBarsPadding(),
                 ) {
                     Icon(Icons.Regular.ArrowExpand, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
+                }
+            }
+            contextMenu?.let { menu ->
+                val popupOrigin = menu.pageWindowOrigin + menu.clickLocalOffset
+                Popup(
+                    alignment = Alignment.TopStart,
+                    offset = popupOrigin,
+                    onDismissRequest = dismissMenu,
+                    properties = PopupProperties(focusable = true, clippingEnabled = false),
+                ) {
+                    Box(
+                        Modifier
+                            .width(IntrinsicSize.Min),
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .width(IntrinsicSize.Min)
+                                .padding(4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Column(Modifier.width(IntrinsicSize.Max)) {
+                                FluentTextButton(
+                                    onClick = {
+                                        dismissMenu()
+                                        handleCopy(menu.page)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(stringResource(Res.string.copy)) }
+                                FluentTextButton(
+                                    onClick = {
+                                        dismissMenu()
+                                        handleSave(menu.page)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(stringResource(Res.string.save)) }
+                            }
+                        }
+                    }
+                }
+            }
+            toast?.takeIf { it.isNotBlank() }?.let { toastMessage ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 48.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Card(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            text = toastMessage,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
                 }
             }
         }
@@ -284,6 +392,7 @@ internal fun VerticalReader(
     canNext: Boolean,
     canPrev: Boolean,
     onChangeChapter: (Boolean) -> Unit,
+    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(initialPage, pages.size) {
@@ -313,7 +422,7 @@ internal fun VerticalReader(
         PagePreloader(pages, { listState.firstVisibleItemIndex }, fit)
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(pages, key = { it.index }) { page ->
-                ZoomablePage(page, Modifier.fillMaxWidth().heightIn(min = 480.dp), fit)
+                ZoomablePage(page, Modifier.fillMaxWidth().heightIn(min = 480.dp), fit, onImageMenu)
             }
         }
         PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
@@ -331,6 +440,7 @@ internal fun PagedReader(
     canNext: Boolean,
     canPrev: Boolean,
     onChangeChapter: (Boolean) -> Unit,
+    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val pagerModifier = Modifier
@@ -360,7 +470,7 @@ internal fun PagedReader(
         reverseLayout = reverse,
         modifier = pagerModifier,
     ) { index ->
-        ZoomablePage(pages[index], Modifier.fillMaxSize(), fit)
+        ZoomablePage(pages[index], Modifier.fillMaxSize(), fit, onImageMenu)
     }
 }
 
@@ -375,6 +485,7 @@ internal fun DoubleReader(
     canNext: Boolean,
     canPrev: Boolean,
     onChangeChapter: (Boolean) -> Unit,
+    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
 ) {
     val pairs = remember(pages) { pages.chunked(2) }
     val pagerState = rememberPagerState(pageCount = { pairs.size })
@@ -403,28 +514,42 @@ internal fun DoubleReader(
     HorizontalPager(state = pagerState, reverseLayout = reverse, modifier = pagerModifier) { index ->
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
             pairs[index].forEach { page ->
-                ZoomablePage(page, Modifier.weight(1f).fillMaxHeight(), fit)
+                ZoomablePage(page, Modifier.weight(1f).fillMaxHeight(), fit, onImageMenu)
             }
         }
     }
 }
 
 @Composable
-internal fun ZoomablePage(page: PageRef, modifier: Modifier, fit: PageFit) {
+internal fun ZoomablePage(
+    page: PageRef,
+    modifier: Modifier,
+    fit: PageFit,
+    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
+) {
     var scale by remember(page.index) { mutableFloatStateOf(1f) }
+    var pageWindowOrigin by remember(page.index) { mutableStateOf(IntOffset.Zero) }
     Box(
-        modifier = modifier.pointerInput(page.index) {
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
-                do {
-                    val event = awaitPointerEvent()
-                    if (event.changes.count { it.pressed } >= 2) {
-                        scale = (scale * event.calculateZoom()).coerceIn(1f, 4f)
-                        event.changes.forEach { it.consume() }
-                    }
-                } while (event.changes.any { it.pressed })
+        modifier = modifier
+            .onGloballyPositioned { coords ->
+                val pos = coords.positionInWindow()
+                pageWindowOrigin = IntOffset(pos.x.toInt(), pos.y.toInt())
             }
-        },
+            .pointerInput(page.index) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        if (event.changes.count { it.pressed } >= 2) {
+                            scale = (scale * event.calculateZoom()).coerceIn(1f, 4f)
+                            event.changes.forEach { it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            .imageContextMenuGesture { local ->
+                onImageMenu(page, pageWindowOrigin, IntOffset(local.x.toInt(), local.y.toInt()))
+            },
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -435,6 +560,9 @@ internal fun ZoomablePage(page: PageRef, modifier: Modifier, fit: PageFit) {
         )
     }
 }
+
+@Composable
+internal expect fun Modifier.imageContextMenuGesture(onTriggered: (androidx.compose.ui.geometry.Offset) -> Unit): Modifier
 
 @Composable
 internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int, fit: PageFit) {
@@ -454,7 +582,7 @@ internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int
     }
     LaunchedEffect(preloadTargets, fit, imageLoader, platformContext) {
         for (page in preloadTargets) {
-            val target = page.localPath ?: page.imageUrl ?: continue
+            val target = page.localPath ?: page.imageUrl
             val req = ImageRequest.Builder(platformContext)
                 .data(target)
                 .build()

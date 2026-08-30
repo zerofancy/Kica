@@ -18,6 +18,10 @@ import top.ntutn.kica.ui.KicaApp
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val legacyStoragePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            (application as KicaApplication).container.legacyStoragePermission.deliver(granted)
+        }
     private val documentTree =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             uri?.let {
@@ -40,6 +44,9 @@ class MainActivity : ComponentActivity() {
         }
         val container = (application as KicaApplication).container
         container.documentTreePicker.bind { documentTree.launch(null) }
+        container.legacyStoragePermission.bind {
+            legacyStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
         setContent {
             val settings by container.library.settings().collectAsState(initial = AppSettings())
             LaunchedEffect(settings.preventScreenshots) {
@@ -61,6 +68,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         (application as KicaApplication).container.documentTreePicker.unbind()
+        (application as KicaApplication).container.legacyStoragePermission.unbind()
         super.onDestroy()
     }
 }

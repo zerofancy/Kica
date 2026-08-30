@@ -19,7 +19,8 @@ class KicaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val documentTreePicker = AndroidDocumentTreePicker()
-        val platform = AndroidPlatformServices(this, documentTreePicker)
+        val legacyStoragePermission = AndroidLegacyStoragePermissionRequester()
+        val platform = AndroidPlatformServices(this, documentTreePicker, legacyStoragePermission)
         val driver = AndroidSqliteDriver(KicaDatabase.Schema, this, "kica.db")
         val database = KicaDatabase(driver)
         val library = SqlLibraryRepository(database)
@@ -35,6 +36,7 @@ class KicaApplication : Application() {
             downloads = AndroidDownloadCoordinator(this, library),
             titleTranslation = titleTranslation,
             documentTreePicker = documentTreePicker,
+            legacyStoragePermission = legacyStoragePermission,
         )
     }
 }
@@ -46,4 +48,5 @@ internal data class AndroidContainer(
     val downloads: AndroidDownloadCoordinator,
     val titleTranslation: TitleTranslationService,
     val documentTreePicker: AndroidDocumentTreePicker,
+    val legacyStoragePermission: AndroidLegacyStoragePermissionRequester,
 )
