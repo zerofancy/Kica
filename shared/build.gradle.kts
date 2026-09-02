@@ -1,12 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
-    id("com.android.kotlin.multiplatform.library")
-    id("app.cash.sqldelight")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -33,33 +33,33 @@ kotlin {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.components.resources)
-            implementation("io.github.compose-fluent:fluent:v0.1.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
-            implementation("io.coil-kt.coil3:coil-compose:3.5.0")
-            implementation("app.cash.sqldelight:runtime:2.1.0")
-            implementation("app.cash.sqldelight:coroutines-extensions:2.1.0")
-            implementation("com.llamatik:library:1.9.1")
+            implementation(libs.compose.fluent)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.coil.compose)
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines.extensions)
+            implementation(libs.llamatik.library)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+            implementation(libs.kotlinx.coroutines.test)
         }
         named("androidMain") {
             dependencies {
-                implementation("androidx.activity:activity-compose:1.12.2")
-                implementation("androidx.core:core-ktx:1.16.0")
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.core.ktx)
             }
         }
         named("desktopMain") {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
+                implementation(libs.kotlinx.coroutines.swing)
             }
         }
         named("desktopTest") {
             dependencies {
-                implementation("app.cash.sqldelight:sqlite-driver:2.1.0")
+                implementation(libs.sqldelight.sqlite.driver)
             }
         }
     }

@@ -2,9 +2,9 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose)
 }
 
 java {
@@ -23,12 +23,12 @@ dependencies {
     implementation(project(":networkJvm"))
     implementation(compose.desktop.currentOs)
     implementation(compose.components.resources)
-    implementation("app.cash.sqldelight:sqlite-driver:2.1.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
-    implementation("io.github.vinceglb:filekit-dialogs:0.14.2")
-    implementation("net.java.dev.jna:jna-platform:5.17.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
-    implementation("ch.qos.logback:logback-classic:1.5.38")
+    implementation(libs.sqldelight.sqlite.driver)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.filekit.dialogs)
+    implementation(libs.jna.platform)
+    implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.logback.classic)
 }
 
 compose.desktop {

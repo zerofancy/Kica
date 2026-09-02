@@ -1,9 +1,9 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose)
 }
 
 android {
@@ -46,10 +46,10 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":networkJvm"))
-    implementation("androidx.activity:activity-compose:1.12.2")
-    implementation("androidx.work:work-runtime-ktx:2.11.0")
-    implementation("app.cash.sqldelight:android-driver:2.1.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.sqldelight.android.driver)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.kotlinx.coroutines.android)
 }
 
