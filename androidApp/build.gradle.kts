@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "top.ntutn.kica"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "top.ntutn.kica"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -21,6 +21,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
