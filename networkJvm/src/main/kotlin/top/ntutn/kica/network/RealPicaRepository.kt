@@ -112,7 +112,7 @@ class RealPicaRepository(
     }
 
     override suspend fun search(keyword: String, categories: List<String>, page: Int): ComicPage {
-        val comics = service.search(page, SearchBody(categories, keyword)).requireSuccess().data.obj("comics")
+        val comics = service.search(page, SearchBody(categories = categories, keyword = keyword, sort = "dd")).requireSuccess().data.obj("comics")
         val items = comics.array("docs").mapNotNull(JsonElement::comicSummary)
         val currentPage = comics.int("page") ?: page
         val totalPages = comics.int("pages")

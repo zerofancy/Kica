@@ -28,7 +28,7 @@ internal data class LoginBody(
 internal data class SearchBody(
     val categories: List<String> = emptyList(),
     val keyword: String = "",
-    val sort: String = "dd",
+    val sort: String,
 )
 
 internal interface PicaService {

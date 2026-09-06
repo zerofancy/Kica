@@ -298,7 +298,9 @@ class PicaProtocolTest {
             assertEquals(listOf("comic-2"), result.items.map { it.id })
             val request = assertNotNull(server.takeRequest())
             assertEquals("/comics/advanced-search?page=2", request.path)
-            assertTrue(request.body.readUtf8().contains("\"categories\":[\"Action\"]"))
+            val requestBody = request.body.readUtf8()
+            assertTrue(requestBody.contains("\"categories\":[\"Action\"]"))
+            assertTrue(requestBody.contains("\"sort\":\"dd\""))
         }
     }
 
