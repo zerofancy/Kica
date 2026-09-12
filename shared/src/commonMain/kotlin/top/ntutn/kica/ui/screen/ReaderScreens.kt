@@ -209,6 +209,13 @@ internal fun ReaderScreen(
             restoredProgress?.let { mode = it.mode }
         }
     }
+    LaunchedEffect(mode) {
+        fit = when (mode) {
+            ReaderMode.VERTICAL -> PageFit.WIDTH
+            ReaderMode.PAGED_LEFT_TO_RIGHT, ReaderMode.PAGED_RIGHT_TO_LEFT,
+            ReaderMode.DOUBLE_LEFT_TO_RIGHT, ReaderMode.DOUBLE_RIGHT_TO_LEFT -> PageFit.HEIGHT
+        }
+    }
     LaunchedEffect(toast) {
         val msg = toast
         if (!msg.isNullOrBlank()) {
