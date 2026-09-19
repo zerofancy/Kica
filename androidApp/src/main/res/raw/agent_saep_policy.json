@@ -1,0 +1,30 @@
+{
+  "schema": "AGRP-Policy/1.0",
+  "policy_version": 1,
+  "package": "top.ntutn.kica",
+  "updated_at": "1758259200000",
+  "default_policy": {
+    "app": {
+      "global_disable": true,
+      "screenshot_disable": false,
+      "input_disable": false
+    }
+  },
+  "scope": {
+    "app": {
+      "global_disable": true,
+      "screenshot_disable": false,
+      "input_disable": false
+    },
+    "activities": {
+      "top.ntutn.kica.AiOperationOptionsActivity": {
+        "name": "AI操作选项",
+        "page_scope": {
+          "global_disable": true,
+          "screenshot_disable": true,
+          "input_disable": true
+        }
+      }
+    }
+  }
+}

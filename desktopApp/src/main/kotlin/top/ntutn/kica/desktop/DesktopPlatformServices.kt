@@ -32,6 +32,7 @@ internal class DesktopPlatformServices(
     override val platformName: String = System.getProperty("os.name")
     override val isDesktop: Boolean = true
     override val credentialStore: CredentialStore = DesktopCredentialStore()
+    override val saepAvailable: Boolean = false
     override val fileLocationProvider: FileLocationProvider = object : FileLocationProvider {
         override suspend fun defaultDownloadLocation(): String {
             val path = dataDirectory.resolve("downloads")
@@ -135,6 +136,8 @@ internal class DesktopPlatformServices(
             true
         }.getOrDefault(false)
     }
+
+    override fun openAiOperationOptions() = Unit
 
     private fun imageExtension(bytes: ByteArray): String = when {
         bytes.size >= 8 && bytes.copyOfRange(0, 8).contentEquals(

@@ -32,6 +32,7 @@ internal class AndroidPlatformServices(
     override val platformName: String = "Android"
     override val isDesktop: Boolean = false
     override val credentialStore: CredentialStore = AndroidCredentialStore(context)
+    override val saepAvailable: Boolean by lazy { SaepManager.isRobotsEnabled(context) }
     override val fileLocationProvider: FileLocationProvider = object : FileLocationProvider {
         override suspend fun defaultDownloadLocation(): String {
             val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
@@ -160,6 +161,14 @@ internal class AndroidPlatformServices(
                 true
             }.getOrDefault(false)
         }
+    }
+
+    override fun openAiOperationOptions() {
+        if (!saepAvailable) return
+        context.startActivity(
+            Intent(context, AiOperationOptionsActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 
     private fun splitNameAndExt(name: String): Pair<String, String?> {

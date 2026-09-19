@@ -24,6 +24,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".AiOperationOptionsActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|fontScale|uiMode"
+            android:exported="false" />
+        <meta-data
+            android:name="com.obric.agentrobots.POLICY_JSON"
+            android:resource="@raw/agent_saep_policy" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

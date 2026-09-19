@@ -122,4 +122,7 @@
     <string name="copy_success">已复制到剪贴板</string>
     <string name="save_success">已保存</string>
     <string name="action_failed">操作失败</string>
+    <string name="ai_operation_options">AI 操作选项</string>
+    <string name="ai_operation_options_description">配置 GUI Agent 对本应用的自动化操作权限</string>
+    <string name="open_ai_operation_options">打开设置</string>
 </resources>

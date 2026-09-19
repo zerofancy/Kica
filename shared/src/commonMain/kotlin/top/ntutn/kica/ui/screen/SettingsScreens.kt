@@ -41,6 +41,8 @@ import top.ntutn.kica.model.ThemePreference
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.about
 import top.ntutn.kica.resources.about_text
+import top.ntutn.kica.resources.ai_operation_options
+import top.ntutn.kica.resources.ai_operation_options_description
 import top.ntutn.kica.resources.cache
 import top.ntutn.kica.resources.cancel
 import top.ntutn.kica.resources.choose_export_location
@@ -57,6 +59,7 @@ import top.ntutn.kica.resources.lock_set_password
 import top.ntutn.kica.resources.lock_set_pattern
 import top.ntutn.kica.resources.logout
 import top.ntutn.kica.resources.network
+import top.ntutn.kica.resources.open_ai_operation_options
 import top.ntutn.kica.resources.password
 import top.ntutn.kica.resources.prevent_screenshots
 import top.ntutn.kica.resources.proxy_direct
@@ -228,6 +231,18 @@ internal fun SettingsScreen(
                         }
                     },
                 )
+            }
+        }
+        if (!platformServices.isDesktop && platformServices.saepAvailable) {
+            SettingCard(stringResource(Res.string.ai_operation_options)) {
+                Text(
+                    stringResource(Res.string.ai_operation_options_description),
+                    style = FluentTheme.typography.caption,
+                    color = FluentTheme.colors.text.text.secondary,
+                )
+                FluentButton(onClick = { platformServices.openAiOperationOptions() }) {
+                    Text(stringResource(Res.string.open_ai_operation_options))
+                }
             }
         }
         SettingCard(stringResource(Res.string.title_translation)) {

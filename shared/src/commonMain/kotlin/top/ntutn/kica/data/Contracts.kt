@@ -82,8 +82,12 @@ interface PlatformServices {
     val isDesktop: Boolean
     val credentialStore: CredentialStore
     val fileLocationProvider: FileLocationProvider
+    /** Whether SAEP (Screen Automation Execution Protocol) is available on this device. */
+    val saepAvailable: Boolean
     suspend fun shareFile(path: String): Boolean
     suspend fun openExternalUrl(url: String): Boolean
     suspend fun copyImage(page: PageRef): Boolean
     suspend fun saveImage(page: PageRef): Boolean
+    /** Opens the AI operation options screen. No-op when SAEP is unavailable. */
+    fun openAiOperationOptions()
 }
