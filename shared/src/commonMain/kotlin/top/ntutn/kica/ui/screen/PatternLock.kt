@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,21 +71,21 @@ private fun PatternLockGrid(
 ) {
     val density = LocalDensity.current
     val dotRadiusPx = with(density) { 14.dp.toPx() }
+    val dragDotRadiusPx = with(density) { 6.dp.toPx() }
     val lineWidthPx = with(density) { 3.dp.toPx() }
     val hitRadiusPx = with(density) { 26.dp.toPx() }
 
     var pattern by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var hoverDot by remember { mutableStateOf<Int?>(null) }
-    var isDragging by remember { mutableStateOf(false) }
+    var dragPosition by remember { mutableStateOf<Offset?>(null) }
     var errorVisible by remember { mutableStateOf(false) }
     var lastErrorTrigger by remember { mutableIntStateOf(0) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val scope = rememberCoroutineScope()
+    val currentOnPatternComplete by rememberUpdatedState(onPatternComplete)
 
     fun reset() {
         pattern = emptyList()
-        hoverDot = null
-        isDragging = false
+        dragPosition = null
         errorVisible = false
     }
 
@@ -127,30 +128,28 @@ private fun PatternLockGrid(
     Canvas(
         modifier = modifier
             .onSizeChanged { size = it }
-            .pointerInput(Unit) {
+            .pointerInput(dotCenters, hitRadiusPx) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         if (errorVisible) return@detectDragGestures
-                        isDragging = true
+                        dragPosition = offset
                         val dot = hitTestDot(offset, dotCenters, hitRadiusPx)
                         if (dot != null && dot !in pattern) {
-                            pattern = pattern + dot
+                            pattern = appendPatternDot(pattern, dot)
                         }
                     },
                     onDrag = { change, _ ->
                         if (errorVisible) return@detectDragGestures
-                        isDragging = true
+                        dragPosition = change.position
                         val dot = hitTestDot(change.position, dotCenters, hitRadiusPx)
-                        hoverDot = dot
                         if (dot != null && dot !in pattern) {
-                            pattern = pattern + dot
+                            pattern = appendPatternDot(pattern, dot)
                         }
                     },
                     onDragEnd = {
-                        isDragging = false
-                        hoverDot = null
+                        dragPosition = null
                         if (pattern.size >= 4) {
-                            onPatternComplete(pattern.joinToString(""))
+                            currentOnPatternComplete(pattern.joinToString(""))
                             scope.launch {
                                 delay(300.milliseconds)
                                 if (!errorVisible) reset()
@@ -160,8 +159,6 @@ private fun PatternLockGrid(
                         }
                     },
                     onDragCancel = {
-                        isDragging = false
-                        hoverDot = null
                         reset()
                     },
                 )
@@ -182,13 +179,13 @@ private fun PatternLockGrid(
             }
         }
 
-        if (isDragging && pattern.isNotEmpty()) {
+        val currentDragPosition = dragPosition
+        if (currentDragPosition != null && pattern.isNotEmpty()) {
             val lastCenter = dotCenters[pattern.last()]
-            val target = hoverDot?.let { dotCenters[it] } ?: lastCenter
             drawLine(
                 color = lineColor.copy(alpha = 0.5f),
                 start = lastCenter,
-                end = target,
+                end = currentDragPosition,
                 strokeWidth = lineWidthPx,
                 cap = StrokeCap.Round,
             )
@@ -207,6 +204,14 @@ private fun PatternLockGrid(
                     style = Stroke(width = lineWidthPx),
                 )
             }
+        }
+
+        if (currentDragPosition != null) {
+            drawCircle(
+                color = activeColor,
+                radius = dragDotRadiusPx,
+                center = currentDragPosition,
+            )
         }
     }
 }
