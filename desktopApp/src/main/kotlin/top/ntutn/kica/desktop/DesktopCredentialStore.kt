@@ -5,15 +5,17 @@ import java.util.Base64
 import java.util.prefs.Preferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import top.ntutn.kica.data.CredentialStore
 
 internal class DesktopCredentialStore : CredentialStore {
     private val osName = System.getProperty("os.name").lowercase()
     private val preferences = Preferences.userRoot().node("top/ntutn/kica")
     private var sessionFallback: String? = null
+    private var backendWarned = false
 
     override suspend fun readToken(): String? = withContext(Dispatchers.IO) {
-        runCatching {
+        runBackend {
             when {
                 osName.contains("windows") -> readWindows()
                 osName.contains("linux") -> readSecretTool()
@@ -26,7 +28,7 @@ internal class DesktopCredentialStore : CredentialStore {
     override suspend fun writeToken(token: String) {
         sessionFallback = token
         withContext(Dispatchers.IO) {
-            runCatching {
+            runBackend {
                 when {
                     osName.contains("windows") -> writeWindows(token)
                     osName.contains("linux") -> writeSecretTool(token)
@@ -39,7 +41,7 @@ internal class DesktopCredentialStore : CredentialStore {
     override suspend fun clearToken() {
         sessionFallback = null
         withContext(Dispatchers.IO) {
-            runCatching {
+            runBackend {
                 when {
                     osName.contains("windows") -> preferences.remove(WINDOWS_TOKEN)
                     osName.contains("linux") -> {
@@ -118,7 +120,20 @@ internal class DesktopCredentialStore : CredentialStore {
         check(process.waitFor() == 0) { "The system credential store rejected the token." }
     }
 
+    /**
+     * 平台凭据后端失败时不能中断登录流程，但必须留下线索：
+     * Linux 依赖 secret-tool（libsecret-tools 包），它不可用时登录状态只能保存在内存里。
+     */
+    private fun <T> runBackend(block: () -> T): Result<T> = runCatching(block)
+        .onFailure { failure ->
+            if (!backendWarned) {
+                backendWarned = true
+                logger.warn("系统凭据库不可用，登录状态只在本次运行内有效", failure)
+            }
+        }
+
     private companion object {
+        private val logger = LoggerFactory.getLogger(DesktopCredentialStore::class.java)
         const val SERVICE = "top.ntutn.kica"
         const val ACCOUNT = "session"
         const val WINDOWS_TOKEN = "session-token-dpapi"
