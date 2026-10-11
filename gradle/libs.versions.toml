@@ -1,13 +1,14 @@
 [versions]
 kotlin = "2.4.21"
-compose-plugin = "1.12.1"
-compose-hot-reload = "1.3.0-beta01"
+compose-plugin = "1.9.3"
+compose-runtime = "1.8.2"
+compose-hot-reload = "1.0.0-beta03"
 agp = "9.4.1"
 sqldelight = "2.4.1"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
 kotlinx-datetime = "0.8.0"
-coil = "3.6.3"
+coil = "3.3.0"
 androidx-activity = "1.13.0"
 androidx-core = "1.19.1"
 androidx-work = "2.12.0"
@@ -21,6 +22,9 @@ compose-fluent = "v0.1.0"
 llamatik = "1.10.1"
 
 [libraries]
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-runtime" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-runtime" }
+compose-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-runtime" }
 # AndroidX
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }

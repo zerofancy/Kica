@@ -30,9 +30,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.components.resources)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.resources)
             implementation(libs.compose.fluent)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
@@ -76,6 +76,7 @@ sqldelight {
 }
 
 compose.resources {
+    generateResClass = always
     packageOfResClass = "top.ntutn.kica.resources"
     publicResClass = true
 }

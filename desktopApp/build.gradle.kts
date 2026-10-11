@@ -33,8 +33,8 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":networkJvm"))
-    implementation(compose.desktop.currentOs)
-    implementation(compose.components.resources)
+    implementation(compose.desktop.currentOs.substringBeforeLast(':') + ":" + libs.versions.compose.runtime.get())
+    implementation(libs.compose.resources)
     implementation(libs.sqldelight.sqlite.driver)
     implementation(libs.coil.network.okhttp)
     implementation(libs.filekit.dialogs)
@@ -46,6 +46,9 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "top.ntutn.kica.desktop.MainKt"
+        buildTypes.release.proguard {
+            configurationFiles.from(project.file("proguard-rules.pro"))
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Kica"
