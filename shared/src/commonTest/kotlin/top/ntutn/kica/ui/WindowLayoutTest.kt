@@ -2,6 +2,8 @@ package top.ntutn.kica.ui
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import top.ntutn.kica.ui.state.WindowLayout
+import top.ntutn.kica.ui.state.classifyWindow
 
 class WindowLayoutTest {
     @Test

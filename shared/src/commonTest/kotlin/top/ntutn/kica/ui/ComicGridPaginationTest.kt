@@ -3,6 +3,7 @@ package top.ntutn.kica.ui
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import top.ntutn.kica.ui.component.shouldLoadMore
 
 class ComicGridPaginationTest {
     @Test

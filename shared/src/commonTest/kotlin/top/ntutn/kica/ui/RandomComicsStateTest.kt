@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.runCurrent
 import top.ntutn.kica.model.ComicSummary
+import top.ntutn.kica.ui.state.RandomComicsUiState
 
 class RandomComicsStateTest {
     @OptIn(ExperimentalCoroutinesApi::class)
