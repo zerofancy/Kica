@@ -3,6 +3,7 @@ kotlin = "2.4.21"
 compose-plugin = "1.9.3"
 compose-runtime = "1.8.2"
 compose-hot-reload = "1.0.0-beta03"
+compose-desktop-keep-kit = "v0.1.1"
 agp = "9.4.1"
 sqldelight = "2.4.1"
 kotlinx-coroutines = "1.11.0"
@@ -75,6 +76,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
 compose-hot-reload = { id = "org.jetbrains.compose.hot-reload", version.ref = "compose-hot-reload" }
+compose-desktop-keep-kit = { id = "io.github.zerofancy.compose-desktop-keep-kit", version.ref = "compose-desktop-keep-kit" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

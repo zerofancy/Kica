@@ -37,8 +37,3 @@
 # Okio uses the inverse facade naming pattern (Okio__OkioKt). Preserve its
 # source/sink contracts to avoid a VerifyError after return-type optimization.
 -keep class okio.** { *; }
-
-# Coil discovers image fetchers/decoders through META-INF/services.
-# Their implementations have no direct references and must survive shrinking.
--keep class * implements coil3.util.FetcherServiceLoaderTarget { *; }
--keep class * implements coil3.util.DecoderServiceLoaderTarget { *; }
