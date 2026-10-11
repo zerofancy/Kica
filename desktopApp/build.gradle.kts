@@ -57,6 +57,9 @@ compose.desktop {
             description = "A Fluent cross-platform PicACG client"
             vendor = "ntutn"
             modules("java.net.http", "java.sql", "jdk.charsets")
+            linux {
+                iconFile.set(project.file("src/main/resources/kica.png"))
+            }
             windows {
                 console = true
                 menuGroup = "ntutn"
