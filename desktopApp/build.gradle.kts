@@ -56,7 +56,7 @@ compose.desktop {
             packageVersion = "0.1.0"
             description = "A Fluent cross-platform PicACG client"
             vendor = "ntutn"
-            modules("java.net.http", "java.sql", "jdk.charsets")
+            modules("java.net.http", "java.sql", "jdk.charsets", "jdk.security.auth")
             linux {
                 iconFile.set(project.file("src/main/resources/kica.png"))
             }

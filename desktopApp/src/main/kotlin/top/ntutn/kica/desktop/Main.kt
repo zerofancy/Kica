@@ -8,6 +8,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.FileKitDialogParent
 import java.awt.Dimension
 import java.nio.file.Files
 import java.nio.file.Path
@@ -24,7 +26,11 @@ import top.ntutn.kica.resources.kica_icon
 import top.ntutn.kica.ui.KicaApp
 
 fun main() = application {
-    val dataDirectory = remember { applicationDataDirectory() }
+    val dataDirectory = remember {
+        applicationDataDirectory().also {
+            FileKit.init(appId = "top.ntutn.kica", filesDir = it.toFile())
+        }
+    }
     val platform = remember { DesktopPlatformServices(dataDirectory) }
     val database = remember {
         Files.createDirectories(dataDirectory)
@@ -51,6 +57,10 @@ fun main() = application {
         icon = painterResource(Res.drawable.kica_icon),
         state = WindowState(width = 1200.dp, height = 800.dp),
     ) {
+        DisposableEffect(platform, window) {
+            platform.dialogParent = FileKitDialogParent.awt(window)
+            onDispose { platform.dialogParent = null }
+        }
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(880, 600)
         }

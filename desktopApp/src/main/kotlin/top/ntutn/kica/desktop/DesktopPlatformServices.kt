@@ -6,19 +6,21 @@ import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
-import java.awt.image.BufferedImage
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.FileKitDialogParent
+import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
+import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
+import io.github.vinceglb.filekit.dialogs.openFileSaver
+import io.github.vinceglb.filekit.path
+import io.github.vinceglb.filekit.write
 import java.io.ByteArrayInputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.imageio.ImageIO
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.swing.Swing
 import kotlinx.coroutines.withContext
 import top.ntutn.kica.data.CredentialStore
 import top.ntutn.kica.data.FileLocationProvider
@@ -29,6 +31,8 @@ import top.ntutn.kica.model.PageRef
 internal class DesktopPlatformServices(
     private val dataDirectory: Path,
 ) : PlatformServices {
+    var dialogParent: FileKitDialogParent? = null
+
     override val platformName: String = System.getProperty("os.name")
     override val isDesktop: Boolean = true
     override val credentialStore: CredentialStore = DesktopCredentialStore()
@@ -40,18 +44,12 @@ internal class DesktopPlatformServices(
             return path.toString()
         }
 
-        override suspend fun chooseExportLocation(): String? = withContext(Dispatchers.Swing) {
-            JFileChooser().apply {
-                fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-                dialogTitle = "Choose export directory"
-            }.let { chooser ->
-                if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-                    chooser.selectedFile.toPath().toString()
-                } else {
-                    null
-                }
-            }
-        }
+        override suspend fun chooseExportLocation(): String? = FileKit.openDirectoryPicker(
+            dialogSettings = FileKitDialogSettings(
+                title = "选择导出目录",
+                parent = dialogParent,
+            ),
+        )?.path
 
         override suspend fun downloadedPages(task: DownloadTask): List<PageRef> =
             withContext(Dispatchers.IO) {
@@ -117,22 +115,16 @@ internal class DesktopPlatformServices(
             val suggestedName = page.originalName
                 .takeIf { name -> name.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS }
                 ?: "kica_${page.index}.${imageExtension(bytes)}"
-            val chosen = withContext(Dispatchers.Swing) {
-                val chooser = JFileChooser().apply {
-                    dialogTitle = "Save image"
-                    selectedFile = File(safeName(suggestedName.ifBlank { "kica_image" }))
-                    fileFilter = FileNameExtensionFilter(
-                        "Images",
-                        "jpg", "jpeg", "png", "webp", "gif", "bmp",
-                    )
-                }
-                if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-                    chooser.selectedFile?.toPath()
-                } else {
-                    null
-                }
-            } ?: return@runCatching false
-            FileOutputStream(chosen.toFile()).use { it.write(bytes) }
+            val chosen = FileKit.openFileSaver(
+                suggestedName = safeName(suggestedName.substringBeforeLast('.')),
+                defaultExtension = suggestedName.substringAfterLast('.').lowercase(),
+                allowedExtensions = IMAGE_EXTENSIONS,
+                dialogSettings = FileKitDialogSettings(
+                    title = "保存图片",
+                    parent = dialogParent,
+                ),
+            ) ?: return@runCatching false
+            chosen.write(bytes)
             true
         }.getOrDefault(false)
     }
