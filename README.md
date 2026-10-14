@@ -122,6 +122,16 @@ Create a Windows EXE on Windows:
 .\gradlew.bat :desktopApp:packageExe
 ```
 
+For an optimized release installer, use `:desktopApp:packageReleaseExe`.
+The EXE under `desktopApp/build/compose/binaries/main-release/exe` is an
+installer. To run without installation, use `:desktopApp:createReleaseDistributable`
+and launch `main-release/app/Kica/Kica.exe`, keeping its `app` and `runtime`
+directories alongside it.
+
+Increment `nativeDistributions.packageVersion` in `desktopApp/build.gradle.kts`
+when distributing an update, and retain the Windows `upgradeUuid`. Rebuilding
+an already installed version can fail with Windows Installer error 1638.
+
 Create a Debian package on Linux:
 
 ```bash

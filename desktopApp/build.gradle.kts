@@ -53,7 +53,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Kica"
-            packageVersion = "0.1.0"
+            packageVersion = "0.1.1"
             description = "A Fluent cross-platform PicACG client"
             vendor = "ntutn"
             modules("java.net.http", "java.sql", "jdk.charsets", "jdk.security.auth")
@@ -61,7 +61,9 @@ compose.desktop {
                 iconFile.set(project.file("src/main/resources/kica.png"))
             }
             windows {
-                console = true
+                iconFile.set(project.file("src/main/resources/kica.ico"))
+                console = false
+                dirChooser = true
                 menuGroup = "ntutn"
                 upgradeUuid = "64b39040-4418-4a29-bf82-926038320105"
             }
