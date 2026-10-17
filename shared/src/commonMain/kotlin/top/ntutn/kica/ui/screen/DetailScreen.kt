@@ -3,6 +3,7 @@ package top.ntutn.kica.ui.screen
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
@@ -118,73 +121,103 @@ internal fun DetailScreen(
                     Modifier.fillMaxSize().verticalScroll(scrollState).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        AsyncImage(
-                            model = comic.coverUrl,
-                            contentDescription = displayTitle,
-                            modifier = Modifier.width(180.dp).aspectRatio(0.72f),
-                            contentScale = ContentScale.Crop,
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(displayTitle, style = FluentTheme.typography.title)
-                            if (displayTitle != comic.title) {
-                                Text(
-                                    comic.title,
-                                    style = FluentTheme.typography.caption,
-                                    color = FluentTheme.colors.text.text.secondary,
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        // Leave enough room beside the 180 dp cover for both action labels.
+                        val compact = maxWidth < 600.dp
+                        val tagsAndActions: @Composable () -> Unit = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    comic.categories.forEach { FluentChip(false, {}, { Text(it) }) }
+                                    comic.tags.take(8).forEach { FluentChip(false, {}, { Text(it) }) }
+                                }
+                                Row(
+                                    modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    FluentButton(
+                                        onClick = {
+                                            val previous = isFavorite
+                                            isFavorite = !previous
+                                            favoriteBusy = true
+                                            scope.launch {
+                                                val succeeded = runCatching { repository.toggleFavorite(comic.id) }
+                                                    .getOrDefault(false)
+                                                if (!succeeded) isFavorite = previous
+                                                favoriteBusy = false
+                                            }
+                                        },
+                                        enabled = !favoriteBusy,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Icon(
+                                            if (isFavorite) Icons.Filled.FilledStar else Icons.Regular.Star,
+                                            contentDescription = null,
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            stringResource(if (isFavorite) Res.string.unfavorite else Res.string.favorite),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    FluentButton(
+                                        onClick = {
+                                            val previous = isLiked
+                                            isLiked = !previous
+                                            likeBusy = true
+                                            scope.launch {
+                                                val succeeded = runCatching { repository.like(comic.id) }
+                                                    .getOrDefault(false)
+                                                if (!succeeded) isLiked = previous
+                                                likeBusy = false
+                                            }
+                                        },
+                                        enabled = !likeBusy,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Icon(
+                                            if (isLiked) Icons.Filled.FilledHeart else Icons.Regular.Heart,
+                                            contentDescription = null,
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            stringResource(if (isLiked) Res.string.unlike else Res.string.like),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                AsyncImage(
+                                    model = comic.coverUrl,
+                                    contentDescription = displayTitle,
+                                    modifier = Modifier.width(180.dp).aspectRatio(0.72f),
+                                    contentScale = ContentScale.Crop,
                                 )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text("${stringResource(Res.string.author)}：${comic.author}")
-                            Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
-                            Spacer(Modifier.height(12.dp))
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                comic.categories.forEach { FluentChip(false, {}, { Text(it) }) }
-                                comic.tags.take(8).forEach { FluentChip(false, {}, { Text(it) }) }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FluentButton(
-                                    onClick = {
-                                        val previous = isFavorite
-                                        isFavorite = !previous
-                                        favoriteBusy = true
-                                        scope.launch {
-                                            val succeeded = runCatching { repository.toggleFavorite(comic.id) }
-                                                .getOrDefault(false)
-                                            if (!succeeded) isFavorite = previous
-                                            favoriteBusy = false
-                                        }
-                                    },
-                                    enabled = !favoriteBusy,
-                                ) {
-                                    Icon(
-                                        if (isFavorite) Icons.Filled.FilledStar else Icons.Regular.Star,
-                                        contentDescription = null,
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(if (isFavorite) Res.string.unfavorite else Res.string.favorite))
+                                Column(Modifier.weight(1f)) {
+                                    Text(displayTitle, style = FluentTheme.typography.title)
+                                    if (displayTitle != comic.title) {
+                                        Text(
+                                            comic.title,
+                                            style = FluentTheme.typography.caption,
+                                            color = FluentTheme.colors.text.text.secondary,
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("${stringResource(Res.string.author)}：${comic.author}")
+                                    Text(stringResource(if (comic.finished) Res.string.finished else Res.string.ongoing))
+
+                                    if (!compact) {
+                                        Spacer(Modifier.height(12.dp))
+                                        tagsAndActions()
+                                    }
                                 }
-                                FluentButton(
-                                    onClick = {
-                                        val previous = isLiked
-                                        isLiked = !previous
-                                        likeBusy = true
-                                        scope.launch {
-                                            val succeeded = runCatching { repository.like(comic.id) }
-                                                .getOrDefault(false)
-                                            if (!succeeded) isLiked = previous
-                                            likeBusy = false
-                                        }
-                                    },
-                                    enabled = !likeBusy,
-                                ) {
-                                    Icon(
-                                        if (isLiked) Icons.Filled.FilledHeart else Icons.Regular.Heart,
-                                        contentDescription = null,
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(if (isLiked) Res.string.unlike else Res.string.like))
-                                }
+                            }
+                            if (compact) {
+                                tagsAndActions()
                             }
                         }
                     }
