@@ -125,4 +125,16 @@
     <string name="ai_operation_options">AI 操作选项</string>
     <string name="ai_operation_options_description">配置 GUI Agent 对本应用的自动化操作权限</string>
     <string name="open_ai_operation_options">打开设置</string>
+    <string name="reader_keyboard">键盘操作</string>
+    <string name="reader_keyboard_close">关闭</string>
+    <string name="reader_first_chapter">已是第一章</string>
+    <string name="reader_last_chapter">已是最后一章</string>
+    <string name="reader_keys_vertical">纵向连续：↓ / ↑ 小幅向下／向上滚动；Page Down / Page Up 或空格 / Shift + 空格滚动约九成可见区域。</string>
+    <string name="reader_keys_ltr">从左到右：→ / ↓ 下一页，← / ↑ 上一页。双页模式每次翻一组，通常为两张图片。</string>
+    <string name="reader_keys_rtl">从右到左：← / ↓ 下一页，→ / ↑ 上一页。双页模式每次翻一组，通常为两张图片。</string>
+    <string name="reader_keys_paging">Page Down / 空格：向后阅读；Page Up / Shift + 空格：向前阅读。Home / End：当前章节首屏／末屏，不跨章。</string>
+    <string name="reader_keys_chapters">Ctrl + Page Down：下一章首屏。Ctrl + Page Up：上一章末屏。Mac 同样使用 Control。</string>
+    <string name="reader_keys_controls">F：显示／隐藏工具栏。F1：查看帮助。Esc：关闭菜单或帮助 → 恢复隐藏的工具栏 → 返回上一页面；每次按下只执行一步。</string>
+    <string name="reader_keys_focus">Tab / Shift + Tab：切换控件。按钮聚焦时，Enter / 空格执行按钮，阅读快捷键让位给控件。点击正文恢复阅读焦点。</string>
+    <string name="reader_keys_boundary">到达章节边界后，松开并再次按键才跨章。长按 ↑ / ↓ 可连续滚动，但不会自动跨章；其他阅读操作每次按下只执行一次。加载中和菜单打开时暂停阅读快捷键。</string>
 </resources>

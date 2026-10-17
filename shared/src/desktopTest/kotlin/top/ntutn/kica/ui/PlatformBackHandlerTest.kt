@@ -7,6 +7,26 @@ import kotlin.test.assertTrue
 
 class PlatformBackHandlerTest {
     @Test
+    fun heldEscapeCannotCloseOverlayAndPopPageTogether() {
+        val press = DesktopEscapePress()
+        var calls = 0
+        repeat(10) { assertTrue(press.press { calls++; true }) }
+        assertEquals(1, calls)
+        press.release()
+        assertTrue(press.press { calls++; true })
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun inactiveWindowDoesNotHandleEscapeFromAnotherWindow() {
+        val registry = DesktopBackHandlerRegistry()
+        val inactive = DesktopBackHandlerEntry(true) { error("Inactive window handled Escape") }
+        inactive.windowFocused = { false }
+        registry.register(inactive)
+        assertFalse(registry.handleBack())
+    }
+
+    @Test
     fun mostRecentlyRegisteredEnabledHandlerRunsFirst() {
         val calls = mutableListOf<String>()
         val registry = DesktopBackHandlerRegistry()

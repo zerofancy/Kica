@@ -2,76 +2,50 @@ package top.ntutn.kica.ui.screen
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
-import coil3.SingletonImageLoader
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
 import io.github.composefluent.component.Icon
-import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowExpand
-import io.github.composefluent.icons.regular.ArrowLeft
-import io.github.composefluent.icons.regular.Maximize
-import io.github.composefluent.surface.Card
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
@@ -85,40 +59,19 @@ import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.action_failed
-import top.ntutn.kica.resources.back
-import top.ntutn.kica.resources.copy
 import top.ntutn.kica.resources.copy_success
-import top.ntutn.kica.resources.downloads
-import top.ntutn.kica.resources.episodes
-import top.ntutn.kica.resources.fit_height
-import top.ntutn.kica.resources.fit_width
 import top.ntutn.kica.resources.fullscreen
 import top.ntutn.kica.resources.load_failed
-import top.ntutn.kica.resources.reader_double_ltr
-import top.ntutn.kica.resources.reader_double_rtl
-import top.ntutn.kica.resources.reader_ltr
-import top.ntutn.kica.resources.reader_mode
-import top.ntutn.kica.resources.reader_rtl
-import top.ntutn.kica.resources.reader_vertical
-import top.ntutn.kica.resources.save
+import top.ntutn.kica.resources.reader_first_chapter
+import top.ntutn.kica.resources.reader_last_chapter
 import top.ntutn.kica.resources.save_success
 import top.ntutn.kica.ui.PlatformBackHandler
-import top.ntutn.kica.ui.PlatformHorizontalScrollbar
-import top.ntutn.kica.ui.PlatformVerticalScrollbar
 import top.ntutn.kica.ui.component.EmptyContent
-import top.ntutn.kica.ui.component.FluentChip
 import top.ntutn.kica.ui.component.FluentIconButton
 import top.ntutn.kica.ui.component.FluentProgressRing
-import top.ntutn.kica.ui.component.FluentTextButton
 import top.ntutn.kica.ui.component.LoadStateContent
 import top.ntutn.kica.ui.progress
 import top.ntutn.kica.ui.toSummary
-
-internal data class ImageContextMenuState(
-    val page: PageRef,
-    val pageWindowOrigin: IntOffset,
-    val clickLocalOffset: IntOffset,
-)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -142,8 +95,10 @@ internal fun ReaderScreen(
     val copySuccessMsg = stringResource(Res.string.copy_success)
     val saveSuccessMsg = stringResource(Res.string.save_success)
     val failedMsg = stringResource(Res.string.action_failed)
-    val restoredState by produceState(false to null as ReadingProgress?, comicId, currentEpisodeId) {
-        value = true to library.readingProgress(comicId, currentEpisodeId)
+    val restoredState by key(comicId, currentEpisodeId) {
+        produceState(false to null as ReadingProgress?) {
+            value = true to library.readingProgress(comicId, currentEpisodeId)
+        }
     }
     val progressLoaded = restoredState.first
     val restoredProgress = restoredState.second
@@ -156,47 +111,79 @@ internal fun ReaderScreen(
     val episodeTitle by remember(episodes, currentEpisodeId) {
         mutableStateOf(episodes.firstOrNull { it.id == currentEpisodeId }?.title ?: currentEpisodeId)
     }
-    val pagesState by produceState<LoadState<List<PageRef>>>(LoadState.Loading, comicId, currentEpisodeId, refresh) {
-        value = runCatching { repository.pages(comicId, currentEpisodeId) }.fold(
-            onSuccess = { LoadState.Data(it) },
-            onFailure = { error ->
-                val task = library.downloads().first()
-                    .firstOrNull { it.comic.id == comicId && it.episode.id == currentEpisodeId }
-                val offline = task?.let {
-                    platformServices.fileLocationProvider.downloadedPages(it)
-                }.orEmpty()
-                if (offline.isNotEmpty()) {
-                    LoadState.Data(offline, fromCache = true)
-                } else {
-                    LoadState.Error(error.message ?: loadFailed)
-                }
-            },
-        )
+    val pagesState by key(comicId, currentEpisodeId, refresh) {
+        produceState<LoadState<List<PageRef>>>(LoadState.Loading) {
+            value = runCatching { repository.pages(comicId, currentEpisodeId) }.fold(
+                onSuccess = { LoadState.Data(it) },
+                onFailure = { error ->
+                    val task = library.downloads().first()
+                        .firstOrNull { it.comic.id == comicId && it.episode.id == currentEpisodeId }
+                    val offline = task?.let {
+                        platformServices.fileLocationProvider.downloadedPages(it)
+                    }.orEmpty()
+                    if (offline.isNotEmpty()) {
+                        LoadState.Data(offline, fromCache = true)
+                    } else {
+                        LoadState.Error(error.message ?: loadFailed)
+                    }
+                },
+            )
+        }
     }
     val scope = rememberCoroutineScope()
     val currentIndex = episodes.indexOfFirst { it.id == currentEpisodeId }
-    val nextEpisode = episodes.getOrNull(currentIndex + 1)
+    val nextEpisode = if (currentIndex >= 0) episodes.getOrNull(currentIndex + 1) else null
     val prevEpisode = episodes.getOrNull(currentIndex - 1)
     val canNext = nextEpisode != null
     val canPrev = prevEpisode != null
+    var chapterChanging by remember { mutableStateOf(false) }
+    var currentReadPage by remember(currentEpisodeId) { mutableStateOf<Int?>(null) }
+    val bodyFocus = remember { FocusRequester() }
+    val toolbarFocus = remember { ReaderToolbarFocus() }
+    var bodyFocused by remember { mutableStateOf(false) }
+    var keyboardInteraction by remember { mutableStateOf(false) }
+    var helpVisible by remember { mutableStateOf(false) }
+    var restoreToolbarFocus by remember { mutableStateOf<FocusRequester?>(null) }
+    var nativeDialogActive by remember { mutableStateOf(false) }
+    val keyboard = remember { ReaderKeyboardController() }
+    val keyState = rememberReaderKeyState()
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val firstChapterMessage = stringResource(Res.string.reader_first_chapter)
+    val lastChapterMessage = stringResource(Res.string.reader_last_chapter)
     val onChangeChapter: (Boolean) -> Unit = { forward ->
         val target = if (forward) nextEpisode else prevEpisode
-        if (target != null) {
+        if (target != null && !chapterChanging) {
+            chapterChanging = true
+            keyState.blockHeldKeys()
             pendingInitialPage = if (forward) 0 else Int.MAX_VALUE
             currentEpisodeId = target.id
         }
     }
-    val initialPage = pendingInitialPage ?: restoredProgress?.pageIndex ?: 0
+    val keyboardChangeChapter: (Boolean) -> Unit = { forward ->
+        if (currentIndex >= 0 && !chapterChanging) {
+            if (if (forward) canNext else canPrev) onChangeChapter(forward)
+            else toast = if (forward) lastChapterMessage else firstChapterMessage
+        }
+    }
+    val initialPage = pendingInitialPage ?: currentReadPage ?: restoredProgress?.pageIndex ?: 0
+    val readingEpisodeId = currentEpisodeId
+    val readingMode = mode
     val savePage: (Int) -> Unit = { page ->
+        if (readingEpisodeId == currentEpisodeId && readingMode == mode) {
+            currentReadPage = page
+            pendingInitialPage = null
+            chapterChanging = false
+        }
+        val saved = progress(comicId, readingEpisodeId, page, readingMode)
+        val savedTitle = episodeTitle
         scope.launch {
-            val saved = progress(comicId, currentEpisodeId, page, mode)
             library.saveProgress(saved)
             comic?.toSummary()?.let { summary ->
                 library.addHistory(
                     HistoryEntry(
                         comic = summary,
-                        episodeId = currentEpisodeId,
-                        episodeTitle = episodeTitle,
+                        episodeId = saved.episodeId,
+                        episodeTitle = savedTitle,
                         pageIndex = page,
                         updatedAtEpochMillis = saved.updatedAtEpochMillis,
                     ),
@@ -224,7 +211,30 @@ internal fun ReaderScreen(
         }
     }
 
-    val dismissMenu: () -> Unit = { contextMenu = null }
+    LaunchedEffect(windowFocused) {
+        if (!windowFocused) keyState.clear()
+    }
+    LaunchedEffect(helpVisible) {
+        if (!helpVisible && platformServices.isDesktop) {
+            val previousFocus = restoreToolbarFocus
+            if (controlsVisible && previousFocus != null) previousFocus.requestFocus() else bodyFocus.requestFocus()
+            restoreToolbarFocus = null
+        }
+    }
+    LaunchedEffect(controlsVisible) {
+        if (!controlsVisible && platformServices.isDesktop) bodyFocus.requestFocus()
+    }
+    LaunchedEffect(currentEpisodeId) {
+        if (platformServices.isDesktop) bodyFocus.requestFocus()
+    }
+    val openHelp: () -> Unit = {
+        restoreToolbarFocus = if (controlsVisible) toolbarFocus.focused else null
+        helpVisible = true
+    }
+    val dismissMenu: () -> Unit = {
+        contextMenu = null
+        if (platformServices.isDesktop) bodyFocus.requestFocus()
+    }
     val handleCopy: (PageRef) -> Unit = { page ->
         scope.launch {
             val ok = runCatching { platformServices.copyImage(page) }.getOrDefault(false)
@@ -233,78 +243,94 @@ internal fun ReaderScreen(
     }
     val handleSave: (PageRef) -> Unit = { page ->
         scope.launch {
-            val ok = runCatching { platformServices.saveImage(page) }.getOrDefault(false)
-            toast = if (ok) saveSuccessMsg else failedMsg
+            nativeDialogActive = true
+            try {
+                val ok = runCatching { platformServices.saveImage(page) }.getOrDefault(false)
+                toast = if (ok) saveSuccessMsg else failedMsg
+            } finally { nativeDialogActive = false }
         }
     }
     val onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit = { page, origin, offset ->
         contextMenu = ImageContextMenuState(page, origin, offset)
     }
-    PlatformBackHandler(enabled = contextMenu != null, onBack = dismissMenu)
+    PlatformBackHandler(enabled = platformServices.isDesktop && !controlsVisible) { controlsVisible = true }
+    val returnToBodyAfterMouse: () -> Unit = {
+        if (platformServices.isDesktop && !keyboardInteraction) bodyFocus.requestFocus()
+    }
 
     val toolbarScrollState = rememberScrollState()
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
-        if (controlsVisible) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xCC202020))
-                    .statusBarsPadding(),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .horizontalScroll(toolbarScrollState)
-                        .padding(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FluentIconButton(onClick = onBack) {
-                        Icon(Icons.Regular.ArrowLeft, contentDescription = stringResource(Res.string.back), tint = Color.White)
-                    }
-                    Text(stringResource(Res.string.reader_mode), color = Color.White)
-                    ReaderModeButton(mode == ReaderMode.VERTICAL, Res.string.reader_vertical) {
-                        mode = ReaderMode.VERTICAL
-                    }
-                    ReaderModeButton(mode == ReaderMode.PAGED_LEFT_TO_RIGHT, Res.string.reader_ltr) {
-                        mode = ReaderMode.PAGED_LEFT_TO_RIGHT
-                    }
-                    ReaderModeButton(mode == ReaderMode.PAGED_RIGHT_TO_LEFT, Res.string.reader_rtl) {
-                        mode = ReaderMode.PAGED_RIGHT_TO_LEFT
-                    }
-                    if (platformServices.isDesktop) {
-                        ReaderModeButton(mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT, Res.string.reader_double_ltr) {
-                            mode = ReaderMode.DOUBLE_LEFT_TO_RIGHT
-                        }
-                        ReaderModeButton(mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, Res.string.reader_double_rtl) {
-                            mode = ReaderMode.DOUBLE_RIGHT_TO_LEFT
-                        }
-                    }
-                    ReaderModeButton(fit == PageFit.WIDTH, Res.string.fit_width) {
-                        fit = PageFit.WIDTH
-                    }
-                    ReaderModeButton(fit == PageFit.HEIGHT, Res.string.fit_height) {
-                        fit = PageFit.HEIGHT
-                    }
-                    FluentIconButton(onClick = { controlsVisible = false }) {
-                        Icon(Icons.Regular.Maximize, contentDescription = stringResource(Res.string.fullscreen), tint = Color.White)
-                    }
-                }
-                PlatformHorizontalScrollbar(toolbarScrollState)
-            }
+    Column(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->
+        if (!platformServices.isDesktop) return@onPreviewKeyEvent false
+        if (event.type == KeyEventType.KeyUp) {
+            keyState.release(event.key)
+            return@onPreviewKeyEvent false
         }
-        Box(Modifier.weight(1f)) {
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        keyboardInteraction = true
+        val repeated = keyState.press(event.key)
+        val command = readerCommand(event.key, mode, event.isShiftPressed, event.isCtrlPressed, event.isAltPressed, event.isMetaPressed)
+            ?: return@onPreviewKeyEvent false
+        if (!windowFocused || helpVisible || contextMenu != null || nativeDialogActive) return@onPreviewKeyEvent false
+        when (command) {
+            ReaderCommand.TOGGLE_TOOLBAR -> { if (!repeated) controlsVisible = !controlsVisible; true }
+            ReaderCommand.HELP -> { if (!repeated) openHelp(); true }
+            else -> if (bodyFocused) {
+                if (!chapterChanging && !keyState.isBlocked(event.key) && (!repeated || readerAcceptsRepeat(command))) {
+                    keyboard.execute?.invoke(command, repeated)
+                }
+                true
+            } else false
+        }
+    }.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            keyboardInteraction = false
+        }
+    }) {
+        if (controlsVisible) {
+            ReaderToolbar(
+                mode = mode,
+                fit = fit,
+                isDesktop = platformServices.isDesktop,
+                toolbarFocus = toolbarFocus,
+                toolbarScrollState = toolbarScrollState,
+                onBack = onBack,
+                onModeChange = { mode = it; returnToBodyAfterMouse() },
+                onFitChange = { fit = it; returnToBodyAfterMouse() },
+                onHelp = openHelp,
+                onHide = { controlsVisible = false },
+            )
+        }
+        Box(Modifier.weight(1f)
+            .then(if (platformServices.isDesktop) Modifier
+                .focusRequester(bodyFocus)
+                .onFocusChanged { bodyFocused = it.isFocused }
+                .focusable()
+                .border(if (bodyFocused) 1.dp else 0.dp, if (bodyFocused) Color(0xFF77AAFF) else Color.Transparent)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        bodyFocus.requestFocus()
+                    }
+                } else Modifier)) {
             LoadStateContent(pagesState, onRetry = { refresh++ }) { pages ->
-                when {
-                    !progressLoaded -> FluentProgressRing(Modifier.align(Alignment.Center))
-                    pages.isEmpty() -> EmptyContent()
-                    mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
-                    mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT ->
-                        DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
-                    else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu)
+                key(currentEpisodeId, mode, refresh) {
+                    when {
+                        !progressLoaded -> FluentProgressRing(Modifier.align(Alignment.Center))
+                        pages.isEmpty() -> EmptyContent()
+                        mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu, keyboard.takeIf { platformServices.isDesktop }, keyboardChangeChapter)
+                        mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT ->
+                            DoubleReader(pages, initialPage, mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu, keyboard.takeIf { platformServices.isDesktop }, keyboardChangeChapter)
+                        else -> PagedReader(pages, initialPage, mode == ReaderMode.PAGED_RIGHT_TO_LEFT, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu, keyboard.takeIf { platformServices.isDesktop }, keyboardChangeChapter)
+                    }
                 }
             }
             if (!controlsVisible) {
                 FluentIconButton(
-                    onClick = { controlsVisible = true },
+                    onClick = {
+                        controlsVisible = true
+                        if (platformServices.isDesktop) bodyFocus.requestFocus()
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .statusBarsPadding(),
@@ -313,430 +339,12 @@ internal fun ReaderScreen(
                 }
             }
             contextMenu?.let { menu ->
-                val popupOrigin = menu.pageWindowOrigin + menu.clickLocalOffset
-                Popup(
-                    alignment = Alignment.TopStart,
-                    offset = popupOrigin,
-                    onDismissRequest = dismissMenu,
-                    properties = PopupProperties(focusable = true, clippingEnabled = false),
-                ) {
-                    Box(
-                        Modifier
-                            .width(IntrinsicSize.Min),
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .width(IntrinsicSize.Min)
-                                .padding(4.dp),
-                            shape = RoundedCornerShape(8.dp),
-                        ) {
-                            Column(Modifier.width(IntrinsicSize.Max)) {
-                                FluentTextButton(
-                                    onClick = {
-                                        dismissMenu()
-                                        handleCopy(menu.page)
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(stringResource(Res.string.copy)) }
-                                FluentTextButton(
-                                    onClick = {
-                                        dismissMenu()
-                                        handleSave(menu.page)
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(stringResource(Res.string.save)) }
-                            }
-                        }
-                    }
-                }
+                ReaderImageContextMenu(menu, dismissMenu, handleCopy, handleSave)
             }
             toast?.takeIf { it.isNotBlank() }?.let { toastMessage ->
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 48.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Card(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Text(
-                            text = toastMessage,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        )
-                    }
-                }
+                ReaderToast(toastMessage)
             }
         }
     }
-}
-
-internal enum class PageFit {
-    WIDTH,
-    HEIGHT,
-}
-
-internal const val PRELOAD_AHEAD = 3
-internal const val PRELOAD_BEHIND = 1
-
-@Composable
-internal fun ReaderModeButton(selected: Boolean, label: org.jetbrains.compose.resources.StringResource, onClick: () -> Unit) {
-    FluentChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(stringResource(label)) },
-        modifier = Modifier.padding(horizontal = 3.dp),
-    )
-}
-
-@Composable
-internal fun VerticalReader(
-    pages: List<PageRef>,
-    initialPage: Int,
-    fit: PageFit,
-    onPageChanged: (Int) -> Unit,
-    canNext: Boolean,
-    canPrev: Boolean,
-    onChangeChapter: (Boolean) -> Unit,
-    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
-) {
-    val listState = rememberLazyListState()
-    LaunchedEffect(initialPage, pages.size) {
-        if (pages.isNotEmpty()) listState.scrollToItem(initialPage.coerceIn(pages.indices))
-    }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect(onPageChanged)
-    }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .wheelChapterOverflow(
-                atStart = { !listState.canScrollBackward },
-                atEnd = { !listState.canScrollForward },
-                onNext = { if (canNext) onChangeChapter(true) },
-                onPrev = { if (canPrev) onChangeChapter(false) },
-            )
-            .touchChapterOverflow(
-                atStart = { !listState.canScrollBackward },
-                atEnd = { !listState.canScrollForward },
-                isHorizontal = false,
-                forwardSign = -1,
-                onNext = { if (canNext) onChangeChapter(true) },
-                onPrev = { if (canPrev) onChangeChapter(false) },
-            ),
-    ) {
-        PagePreloader(pages, { listState.firstVisibleItemIndex }, fit)
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            items(pages, key = { it.index }) { page ->
-                ZoomablePage(page, Modifier.fillMaxWidth().heightIn(min = 480.dp), fit, onImageMenu)
-            }
-        }
-        PlatformVerticalScrollbar(listState, Modifier.align(Alignment.CenterEnd))
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun PagedReader(
-    pages: List<PageRef>,
-    initialPage: Int,
-    reverse: Boolean,
-    fit: PageFit,
-    onPageChanged: (Int) -> Unit,
-    canNext: Boolean,
-    canPrev: Boolean,
-    onChangeChapter: (Boolean) -> Unit,
-    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
-) {
-    val pagerState = rememberPagerState(pageCount = { pages.size })
-    val pagerModifier = Modifier
-        .fillMaxSize()
-        .mouseWheelPaging(
-            pagerState,
-            onOverflowForward = { if (canNext) onChangeChapter(true) },
-            onOverflowBackward = { if (canPrev) onChangeChapter(false) },
-        )
-        .touchChapterOverflow(
-            atStart = { pagerState.currentPage == 0 },
-            atEnd = { pagerState.currentPage >= pages.size - 1 },
-            isHorizontal = true,
-            forwardSign = if (reverse) 1 else -1,
-            onNext = { if (canNext) onChangeChapter(true) },
-            onPrev = { if (canPrev) onChangeChapter(false) },
-        )
-    LaunchedEffect(initialPage, pages.size) {
-        if (pages.isNotEmpty()) pagerState.scrollToPage(initialPage.coerceIn(pages.indices))
-    }
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.distinctUntilChanged().collect(onPageChanged)
-    }
-    PagePreloader(pages, { pagerState.currentPage }, fit)
-    HorizontalPager(
-        state = pagerState,
-        reverseLayout = reverse,
-        modifier = pagerModifier,
-    ) { index ->
-        ZoomablePage(pages[index], Modifier.fillMaxSize(), fit, onImageMenu)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun DoubleReader(
-    pages: List<PageRef>,
-    initialPage: Int,
-    reverse: Boolean,
-    fit: PageFit,
-    onPageChanged: (Int) -> Unit,
-    canNext: Boolean,
-    canPrev: Boolean,
-    onChangeChapter: (Boolean) -> Unit,
-    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
-) {
-    val pairs = remember(pages) { pages.chunked(2) }
-    val pagerState = rememberPagerState(pageCount = { pairs.size })
-    val pagerModifier = Modifier
-        .fillMaxSize()
-        .mouseWheelPaging(
-            pagerState,
-            onOverflowForward = { if (canNext) onChangeChapter(true) },
-            onOverflowBackward = { if (canPrev) onChangeChapter(false) },
-        )
-        .touchChapterOverflow(
-            atStart = { pagerState.currentPage == 0 },
-            atEnd = { pagerState.currentPage >= pairs.size - 1 },
-            isHorizontal = true,
-            forwardSign = if (reverse) 1 else -1,
-            onNext = { if (canNext) onChangeChapter(true) },
-            onPrev = { if (canPrev) onChangeChapter(false) },
-        )
-    LaunchedEffect(initialPage, pairs.size) {
-        if (pairs.isNotEmpty()) pagerState.scrollToPage((initialPage / 2).coerceIn(pairs.indices))
-    }
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.distinctUntilChanged().collect { onPageChanged(it * 2) }
-    }
-    PagePreloader(pages, { pagerState.currentPage * 2 }, fit)
-    HorizontalPager(state = pagerState, reverseLayout = reverse, modifier = pagerModifier) { index ->
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
-            pairs[index].forEach { page ->
-                ZoomablePage(page, Modifier.weight(1f).fillMaxHeight(), fit, onImageMenu)
-            }
-        }
-    }
-}
-
-@Composable
-internal fun ZoomablePage(
-    page: PageRef,
-    modifier: Modifier,
-    fit: PageFit,
-    onImageMenu: (PageRef, IntOffset, IntOffset) -> Unit,
-) {
-    var scale by remember(page.index) { mutableFloatStateOf(1f) }
-    var pageWindowOrigin by remember(page.index) { mutableStateOf(IntOffset.Zero) }
-    Box(
-        modifier = modifier
-            .onGloballyPositioned { coords ->
-                val pos = coords.positionInWindow()
-                pageWindowOrigin = IntOffset(pos.x.toInt(), pos.y.toInt())
-            }
-            .pointerInput(page.index) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent()
-                        if (event.changes.count { it.pressed } >= 2) {
-                            scale = (scale * event.calculateZoom()).coerceIn(1f, 4f)
-                            event.changes.forEach { it.consume() }
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            }
-            .imageContextMenuGesture { local ->
-                onImageMenu(page, pageWindowOrigin, IntOffset(local.x.toInt(), local.y.toInt()))
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        AsyncImage(
-            model = page.localPath ?: page.imageUrl,
-            contentDescription = page.originalName,
-            modifier = Modifier.fillMaxSize().scale(scale),
-            contentScale = if (fit == PageFit.WIDTH) ContentScale.FillWidth else ContentScale.Fit,
-        )
-    }
-}
-
-@Composable
-internal expect fun Modifier.imageContextMenuGesture(onTriggered: (androidx.compose.ui.geometry.Offset) -> Unit): Modifier
-
-@Composable
-internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int, fit: PageFit) {
-    val platformContext = LocalPlatformContext.current
-    val imageLoader = remember(platformContext) { SingletonImageLoader.get(platformContext) }
-    val currentSnapshot = remember { mutableIntStateOf(currentIndexProvider()) }
-    LaunchedEffect(pages) {
-        snapshotFlow { currentIndexProvider() }
-            .distinctUntilChanged()
-            .collect { currentSnapshot.intValue = it }
-    }
-    val preloadTargets = remember(pages, currentSnapshot.intValue, fit) {
-        val cur = currentSnapshot.intValue.coerceIn(pages.indices)
-        val lo = (cur - PRELOAD_BEHIND).coerceAtLeast(0)
-        val hi = (cur + PRELOAD_AHEAD).coerceAtMost(pages.lastIndex)
-        pages.subList(lo, hi + 1)
-    }
-    LaunchedEffect(preloadTargets, fit, imageLoader, platformContext) {
-        for (page in preloadTargets) {
-            val target = page.localPath ?: page.imageUrl
-            val req = ImageRequest.Builder(platformContext)
-                .data(target)
-                .build()
-            imageLoader.enqueue(req)
-        }
-    }
-}
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
-@Composable
-internal fun Modifier.mouseWheelPaging(
-    state: androidx.compose.foundation.pager.PagerState,
-    onOverflowForward: () -> Unit = {},
-    onOverflowBackward: () -> Unit = {},
-): Modifier {
-    val scope = rememberCoroutineScope()
-    var paging by remember(state) { mutableStateOf(false) }
-    var overflowFired by remember(state) { mutableStateOf(false) }
-    val forwardState = rememberUpdatedState(onOverflowForward)
-    val backwardState = rememberUpdatedState(onOverflowBackward)
-    return pointerInput(state, scope) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.type != PointerEventType.Scroll) continue
-
-                val scroll = event.changes.firstOrNull()?.scrollDelta ?: continue
-                val delta = if (abs(scroll.y) >= abs(scroll.x)) scroll.y else scroll.x
-                if (delta != 0f) {
-                    event.changes.forEach { it.consume() }
-                    if (!paging && state.pageCount > 0) {
-                        val direction = if (delta > 0f) 1 else -1
-                        val target = (state.currentPage + direction).coerceIn(0, state.pageCount - 1)
-                        if (target != state.currentPage) {
-                            paging = true
-                            scope.launch {
-                                try {
-                                    state.animateScrollToPage(target)
-                                } finally {
-                                    paging = false
-                                }
-                            }
-                        } else if (!overflowFired) {
-                            overflowFired = true
-                            scope.launch {
-                                delay(OVERFLOW_COOLDOWN_MS)
-                                overflowFired = false
-                            }
-                            if (direction > 0) forwardState.value() else backwardState.value()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private const val OVERFLOW_COOLDOWN_MS = 500L
-
-internal const val CHAPTER_OVERFLOW_THRESHOLD_DP = 40
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun Modifier.touchChapterOverflow(
-    atStart: () -> Boolean,
-    atEnd: () -> Boolean,
-    isHorizontal: Boolean,
-    forwardSign: Int,
-    onNext: () -> Unit,
-    onPrev: () -> Unit,
-): Modifier {
-    val threshold = with(LocalDensity.current) { CHAPTER_OVERFLOW_THRESHOLD_DP.dp.toPx() }
-    val atStartState = rememberUpdatedState(atStart)
-    val atEndState = rememberUpdatedState(atEnd)
-    val onNextState = rememberUpdatedState(onNext)
-    val onPrevState = rememberUpdatedState(onPrev)
-    return pointerInput(threshold, isHorizontal, forwardSign) {
-        awaitPointerEventScope {
-            var total = 0f
-            var fired = false
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                val pressedCount = event.changes.count { it.pressed }
-                if (pressedCount != 1) {
-                    // no drag, release, or multi-touch (zoom) -> reset
-                    total = 0f
-                    fired = false
-                    continue
-                }
-                val change = event.changes.first { it.pressed }
-                val delta = if (isHorizontal) {
-                    change.position.x - change.previousPosition.x
-                } else {
-                    change.position.y - change.previousPosition.y
-                }
-                total += delta
-                if (!fired) {
-                    val projected = total * forwardSign
-                    if (projected > threshold && atEndState.value()) {
-                        onNextState.value()
-                        fired = true
-                    } else if (projected < -threshold && atStartState.value()) {
-                        onPrevState.value()
-                        fired = true
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
-@Composable
-internal fun Modifier.wheelChapterOverflow(
-    atStart: () -> Boolean,
-    atEnd: () -> Boolean,
-    onNext: () -> Unit,
-    onPrev: () -> Unit,
-): Modifier {
-    val scope = rememberCoroutineScope()
-    var overflowFired by remember { mutableStateOf(false) }
-    val atStartState = rememberUpdatedState(atStart)
-    val atEndState = rememberUpdatedState(atEnd)
-    val onNextState = rememberUpdatedState(onNext)
-    val onPrevState = rememberUpdatedState(onPrev)
-    return pointerInput(Unit) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.type != PointerEventType.Scroll) continue
-                val scroll = event.changes.firstOrNull()?.scrollDelta ?: continue
-                if (scroll.y == 0f || overflowFired) continue
-                if (scroll.y > 0f && atEndState.value()) {
-                    overflowFired = true
-                    scope.launch {
-                        delay(OVERFLOW_COOLDOWN_MS)
-                        overflowFired = false
-                    }
-                    onNextState.value()
-                } else if (scroll.y < 0f && atStartState.value()) {
-                    overflowFired = true
-                    scope.launch {
-                        delay(OVERFLOW_COOLDOWN_MS)
-                        overflowFired = false
-                    }
-                    onPrevState.value()
-                }
-            }
-        }
-    }
+    if (helpVisible) ReaderKeyboardHelp(mode = mode, onDismiss = { helpVisible = false })
 }

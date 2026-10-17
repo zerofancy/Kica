@@ -60,6 +60,7 @@ kotlin {
         named("desktopTest") {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)
+                implementation(compose.desktop.currentOs.substringBeforeLast(':') + ":" + libs.versions.compose.runtime.get())
             }
         }
     }
@@ -79,4 +80,9 @@ compose.resources {
     generateResClass = always
     packageOfResClass = "top.ntutn.kica.resources"
     publicResClass = true
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    // Changing the opt-in must invalidate an otherwise up-to-date test run.
+    inputs.property("readerWindowTest", providers.environmentVariable("KICA_READER_WINDOW_TEST").orElse("0"))
 }
