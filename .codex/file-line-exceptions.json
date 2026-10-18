@@ -1,0 +1,6 @@
+{
+  "shared/src/commonMain/kotlin/top/ntutn/kica/ui/screen/SettingsScreens.kt": {
+    "max_lines": 501,
+    "reason": "首次接入行数检查时的存量设置页面，包含常规设置、网络与锁屏配置；后续按设置职责拆分，期间不得超过现有 501 行。"
+  }
+}
