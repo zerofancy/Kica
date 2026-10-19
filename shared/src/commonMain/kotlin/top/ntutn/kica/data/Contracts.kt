@@ -52,6 +52,9 @@ interface LibraryRepository {
     suspend fun upsertDownload(task: DownloadTask)
     suspend fun removeDownload(id: String)
     suspend fun updateSettings(settings: AppSettings)
+    suspend fun updateBlockedTags(transform: (Set<String>) -> Set<String>)
+    suspend fun tagMetadata(comicId: String): TagMetadata?
+    suspend fun saveTagMetadata(metadata: TagMetadata)
     suspend fun clearCache()
 }
 
@@ -87,6 +90,7 @@ interface PlatformServices {
     suspend fun shareFile(path: String): Boolean
     suspend fun openExternalUrl(url: String): Boolean
     suspend fun copyImage(page: PageRef): Boolean
+    suspend fun copyText(text: String): Boolean
     suspend fun saveImage(page: PageRef): Boolean
     /** Opens the AI operation options screen. No-op when SAEP is unavailable. */
     fun openAiOperationOptions()

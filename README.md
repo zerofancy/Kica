@@ -20,6 +20,7 @@ all `top.ntutn.kica`.
 - Login with secure token storage; passwords are never persisted
 - Recommendations, random comics, categories, rankings, search, and favorites
 - Comic details, episodes, favorite and like actions
+- Complete, interactive tags with keyword search, copying, and persistent local blocking
 - History and per-episode reading progress
 - Vertical, paged left-to-right, paged right-to-left, and desktop double-page
   reading modes with zoom
@@ -111,6 +112,17 @@ Run Android lint:
 ```bash
 ./gradlew :androidApp:lintDebug
 ```
+
+Verify database migrations:
+
+```bash
+./gradlew :shared:verifyCommonMainKicaDatabaseMigration
+```
+
+Versioned schema baselines are stored as reviewable SQL under
+`shared/databases`. Gradle generates the SQLite files
+needed for verification under `shared/build/generated/migration-baselines`.
+Generated `.db` files are build outputs and must not be committed.
 
 Real-service tests are not enabled by default and must never embed credentials.
 

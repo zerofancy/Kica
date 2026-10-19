@@ -100,9 +100,9 @@ internal class DesktopPlatformServices(
         }.getOrDefault(false)
     }
 
-    private fun copyText(text: String): Boolean {
-        if (text.isBlank()) return false
-        return runCatching {
+    override suspend fun copyText(text: String): Boolean = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext false
+        runCatching {
             val selection = java.awt.datatransfer.StringSelection(text)
             Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
             true

@@ -1,0 +1,6 @@
+CREATE TABLE comic_tag_cache (
+    comic_id TEXT NOT NULL PRIMARY KEY,
+    tags_json TEXT NOT NULL,
+    verified_at INTEGER NOT NULL,
+    last_accessed_at INTEGER NOT NULL
+);

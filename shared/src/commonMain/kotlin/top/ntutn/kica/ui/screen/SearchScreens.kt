@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +29,7 @@ import io.github.composefluent.icons.regular.ArrowLeft
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
+import top.ntutn.kica.data.cancellableResult
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicSummary
@@ -38,8 +40,10 @@ import top.ntutn.kica.resources.categories
 import top.ntutn.kica.resources.search
 import top.ntutn.kica.resources.search_failed
 import top.ntutn.kica.resources.search_hint
-import top.ntutn.kica.ui.filterBlockedSummaries
+import top.ntutn.kica.resources.tags_source
+import top.ntutn.kica.resources.tags_search_hint
 import top.ntutn.kica.ui.component.ComicGrid
+import top.ntutn.kica.ui.component.ComicGridPage
 import top.ntutn.kica.ui.component.FluentChip
 import top.ntutn.kica.ui.component.FluentIconButton
 import top.ntutn.kica.ui.component.FluentPrimaryButton
@@ -54,35 +58,38 @@ internal fun SearchScreen(
     library: LibraryRepository,
     initialQuery: String,
     initialCategory: String?,
+    fromTag: Boolean = false,
     onBack: () -> Unit,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    var query by remember(initialQuery, initialCategory) { mutableStateOf(initialQuery) }
-    var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
-    var criteria by remember(initialQuery, initialCategory) {
-        mutableStateOf(
-            SearchCriteria(initialQuery.trim(), initialCategory)
-                .takeIf { it.keyword.isNotEmpty() || it.category != null },
-        )
+    val pages = LocalSearchPages.current
+    val page = remember(initialQuery, initialCategory, fromTag) {
+        val key = top.ntutn.kica.model.AppRoute.Search(initialQuery, initialCategory, fromTag).toString()
+        pages?.getOrPut(key) { SearchPageState(initialQuery, initialCategory, fromTag) }
+            ?: SearchPageState(initialQuery, initialCategory, fromTag)
     }
-    var refresh by remember { mutableIntStateOf(0) }
+    var query by page.query
+    var tagSource by page.fromTag
+    var selectedCategory by page.category
+    var criteria by page.criteria
+    var refresh by page.refresh
     val searchFailed = stringResource(Res.string.search_failed)
-    var state by remember(initialQuery, initialCategory) {
-        mutableStateOf<LoadState<List<ComicSummary>>>(
-            if (criteria == null) LoadState.Idle else LoadState.Loading,
-        )
-    }
-    var loadedPage by remember { mutableIntStateOf(0) }
-    var totalPages by remember { mutableIntStateOf(0) }
-    var loadingMore by remember { mutableStateOf(false) }
-    var loadMoreError by remember { mutableStateOf<String?>(null) }
+    var state by page.result
+    var loadedPage by page.loadedPage
+    var loadedPages by page.loadedPages
+    var totalPages by page.totalPages
+    var loadingMore by page.loadingMore
+    var loadMoreError by page.loadMoreError
     val scope = rememberCoroutineScope()
-    val settings by library.settings().collectAsState(initial = AppSettings())
-    val blocked = settings.blockedCategories
 
     LaunchedEffect(criteria, refresh) {
+        if (page.completed == (criteria to refresh) && state is LoadState.Data) return@LaunchedEffect
+        page.completed = null
+        page.generation++
+        val generation = page.generation
         val current = criteria
         loadedPage = 0
+        loadedPages = emptyList()
         totalPages = 0
         loadingMore = false
         loadMoreError = null
@@ -90,7 +97,7 @@ internal fun SearchScreen(
             state = LoadState.Idle
         } else {
             state = LoadState.Loading
-            state = runCatching {
+            state = cancellableResult {
                 repository.search(
                     keyword = current.keyword,
                     categories = current.category?.let(::listOf).orEmpty(),
@@ -99,35 +106,41 @@ internal fun SearchScreen(
             }.fold(
                 onSuccess = { result ->
                     loadedPage = result.page
+                    loadedPages = listOf(ComicGridPage(result.page, result.items.map { it.id }))
                     totalPages = result.totalPages
-                    LoadState.Data(result.items.filterBlockedSummaries(blocked))
+                    LoadState.Data(result.items)
                 },
                 onFailure = { LoadState.Error(it.message ?: searchFailed) },
             )
+            if (generation == page.generation && state is LoadState.Data) page.completed = current to refresh
         }
+    }
+    DisposableEffect(page) {
+        onDispose { page.generation++; loadingMore = false }
     }
     val canLoadMore = state is LoadState.Data && loadedPage < totalPages
     val requestLoadMore: () -> Unit = request@{
         val current = criteria ?: return@request
         if (!canLoadMore || loadingMore) return@request
         val nextPage = loadedPage + 1
+        val generation = page.generation
         loadingMore = true
         loadMoreError = null
         scope.launch {
-            val result = runCatching {
+            val result = cancellableResult {
                 repository.search(
                     keyword = current.keyword,
                     categories = current.category?.let(::listOf).orEmpty(),
                     page = nextPage,
                 )
             }
-            if (criteria != current) return@launch
+            if (criteria != current || generation != page.generation) return@launch
             result.fold(
                 onSuccess = { page ->
+                    loadedPages = loadedPages + ComicGridPage(nextPage, page.items.map { it.id })
                     val existing = (state as? LoadState.Data)?.value.orEmpty()
                     val merged = (existing + page.items)
                         .distinctBy(ComicSummary::id)
-                        .filterBlockedSummaries(blocked)
                     state = LoadState.Data(merged)
                     loadedPage = maxOf(nextPage, page.page)
                     totalPages = page.totalPages
@@ -156,6 +169,7 @@ internal fun SearchScreen(
             FluentPrimaryButton(
                 onClick = {
                     val keyword = query.trim()
+                    if (keyword != initialQuery.trim()) tagSource = false
                     if (keyword.isNotEmpty() || selectedCategory != null) {
                         val nextCriteria = SearchCriteria(keyword, selectedCategory)
                         if (criteria == nextCriteria) refresh++ else criteria = nextCriteria
@@ -177,6 +191,10 @@ internal fun SearchScreen(
             )
         }
         Spacer(Modifier.height(16.dp))
+        if (tagSource) {
+            Text(stringResource(Res.string.tags_source, initialQuery))
+            Text(stringResource(Res.string.tags_search_hint))
+        }
         Box(Modifier.weight(1f)) {
             when (val value = state) {
                 LoadState.Idle -> Box(
@@ -199,6 +217,7 @@ internal fun SearchScreen(
                         canLoadMore = canLoadMore,
                         loadMoreError = loadMoreError,
                         onLoadMore = requestLoadMore,
+                        pages = loadedPages,
                     )
                 }
             }

@@ -19,6 +19,7 @@ data class ComicSummary(
     val finished: Boolean = false,
     val likes: Int = 0,
     val views: Int = 0,
+    val tags: List<String>? = null,
 )
 
 @Serializable
@@ -44,7 +45,7 @@ data class ComicDetail(
     val description: String = "",
     val coverUrl: String = "",
     val categories: List<String> = emptyList(),
-    val tags: List<String> = emptyList(),
+    val tags: List<String>? = null,
     val finished: Boolean = false,
     val episodeCount: Int = 0,
     val likes: Int = 0,
@@ -165,6 +166,7 @@ data class AppSettings(
     val lockPasswordHash: String? = null,
     val lockPatternHash: String? = null,
     val blockedCategories: Set<String> = emptySet(),
+    val blockedTags: Set<String> = emptySet(),
     val aiOperationEnabled: Boolean = false,
 )
 
@@ -186,6 +188,7 @@ sealed interface AppRoute {
     data class Search(
         val initialQuery: String = "",
         val category: String? = null,
+        val fromTag: Boolean = false,
     ) : AppRoute
     data class Detail(val comicId: String) : AppRoute
     data class Reader(val comicId: String, val episodeId: String) : AppRoute

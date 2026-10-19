@@ -83,7 +83,8 @@ import top.ntutn.kica.resources.rank_knight
 import top.ntutn.kica.resources.ranking
 import top.ntutn.kica.resources.search
 import top.ntutn.kica.ui.filterBlockedCategories
-import top.ntutn.kica.ui.filterBlockedSummaries
+import top.ntutn.kica.ui.rememberComicFilter
+import top.ntutn.kica.ui.ComicFilterNotice
 import top.ntutn.kica.ui.PlatformBackHandler
 import top.ntutn.kica.ui.PlatformVerticalScrollbar
 import top.ntutn.kica.ui.component.ComicCard
@@ -130,6 +131,9 @@ internal fun DiscoverScreen(
             .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
     }
     val gridState = rememberLazyGridState()
+    val rankingFilter = rememberComicFilter(
+        (rankingState as? LoadState.Data)?.value.orEmpty(), library,
+    )
 
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
@@ -218,7 +222,10 @@ internal fun DiscoverScreen(
             }
             when (val rankingValue = rankingState) {
                 is LoadState.Data -> {
-                    val visible = rankingValue.value.filterBlockedSummaries(blocked)
+                    val visible = rankingFilter.visible
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        ComicFilterNotice(rankingFilter, library)
+                    }
                     if (visible.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(

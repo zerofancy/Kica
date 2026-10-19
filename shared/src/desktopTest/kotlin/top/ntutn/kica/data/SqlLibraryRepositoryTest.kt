@@ -50,7 +50,7 @@ class SqlLibraryRepositoryTest {
             assertEquals(comics, repository.cachedRecommendations())
             assertEquals(comics, repository.cachedRandomComics())
             assertEquals(categories, repository.cachedCategories())
-            assertEquals(2L, KicaDatabase.Schema.version)
+            assertEquals(3L, KicaDatabase.Schema.version)
 
             repository.clearCache()
             assertNull(repository.cachedRecommendations())
@@ -95,6 +95,13 @@ class SqlLibraryRepositoryTest {
             val repository = SqlLibraryRepository(database)
 
             assertFalse(repository.settings().first().titleTranslationEnabled)
+            assertEquals(emptySet(), repository.settings().first().blockedTags)
+            repository.updateBlockedTags { it + "travel" }
+            repository.saveTagMetadata(TagMetadata("comic", listOf("travel"), 123))
+            assertEquals(listOf("travel"), repository.tagMetadata("comic")?.tags)
+            repository.clearCache()
+            assertNull(repository.tagMetadata("comic"))
+            assertEquals(setOf("travel"), repository.settings().first().blockedTags)
             val cache = SqlTitleTranslationCache(database)
             val key = TitleTranslationCacheKey("原文", "zh-CN", "model", 1)
             cache.put(key, "译文", 1)

@@ -66,11 +66,50 @@ kotlin {
     }
 }
 
+val migrationBaselineRuntime = configurations.create("migrationBaselineRuntime") {
+    isCanBeConsumed = false
+}
+
+dependencies {
+    add(migrationBaselineRuntime.name, libs.sqldelight.sqlite.driver)
+}
+
+val migrationBaselineSources = layout.projectDirectory.dir("databases")
+val generatedMigrationBaselines = layout.buildDirectory.dir("generated/migration-baselines")
+val migrationBaselineGenerator = rootProject.layout.projectDirectory.file("scripts/GenerateMigrationBaselines.java")
+
+val generateMigrationBaselines = tasks.register<JavaExec>("generateMigrationBaselines") {
+    group = "verification"
+    description = "Generate temporary SQLDelight database baselines from versioned SQL sources."
+    classpath = migrationBaselineRuntime
+    mainClass.set(migrationBaselineGenerator.asFile.absolutePath)
+    args(migrationBaselineSources.asFile.absolutePath, generatedMigrationBaselines.get().asFile.absolutePath)
+    inputs.file(migrationBaselineGenerator)
+    inputs.files(fileTree(migrationBaselineSources) { include("*.sql") })
+    outputs.dir(generatedMigrationBaselines)
+}
+
+tasks.withType<app.cash.sqldelight.gradle.VerifyMigrationTask>().configureEach {
+    if (name.contains("KicaDatabase")) {
+        dependsOn(generateMigrationBaselines)
+        inputs.dir(generatedMigrationBaselines).withPathSensitivity(PathSensitivity.RELATIVE)
+        val baselineDirectory = generatedMigrationBaselines.get().asFile
+        doFirst {
+            val verification = this as app.cash.sqldelight.gradle.VerifyMigrationTask
+            val originalUnit = verification.compilationUnit.get()
+            verification.compilationUnit.set(originalUnit.copy(
+                sourceFolders = originalUnit.sourceFolders +
+                    app.cash.sqldelight.gradle.SqlDelightSourceFolderImpl(baselineDirectory),
+            ))
+        }
+    }
+}
+
 sqldelight {
     databases {
         create("KicaDatabase") {
             packageName.set("top.ntutn.kica.db")
-            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
+            schemaOutputDirectory.set(layout.buildDirectory.dir("generated/schema-snapshots"))
             verifyMigrations.set(true)
         }
     }
@@ -85,4 +124,5 @@ compose.resources {
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     // Changing the opt-in must invalidate an otherwise up-to-date test run.
     inputs.property("readerWindowTest", providers.environmentVariable("KICA_READER_WINDOW_TEST").orElse("0"))
+    inputs.property("tagWindowTest", providers.environmentVariable("KICA_TAG_WINDOW_TEST").orElse("0"))
 }

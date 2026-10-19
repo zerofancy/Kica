@@ -178,6 +178,7 @@ internal fun RouteContent(
             library = libraryRepository,
             initialQuery = route.initialQuery,
             initialCategory = route.category,
+            fromTag = route.fromTag,
             onBack = onBack,
         ) {
             onNavigate(AppRoute.Detail(it.id))
@@ -187,6 +188,8 @@ internal fun RouteContent(
             repository = picaRepository,
             downloads = downloadCoordinator,
             platformServices = platformServices,
+            library = libraryRepository,
+            onTagSearch = { onNavigate(AppRoute.Search(initialQuery = it, fromTag = true)) },
             onBack = onBack,
             onRead = { onNavigate(AppRoute.Reader(route.comicId, it)) },
         )
@@ -270,6 +273,7 @@ internal fun ComicDetail.toSummary() = ComicSummary(
     author = author,
     coverUrl = coverUrl,
     categories = categories,
+    tags = tags,
     finished = finished,
     likes = likes,
     views = views,

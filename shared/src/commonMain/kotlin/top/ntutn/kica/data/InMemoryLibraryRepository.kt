@@ -3,6 +3,7 @@ package top.ntutn.kica.data
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicCategory
 import top.ntutn.kica.model.ComicSummary
@@ -15,6 +16,23 @@ class InMemoryLibraryRepository : LibraryRepository {
     private val downloadState = MutableStateFlow<List<DownloadTask>>(emptyList())
     private val settingsState = MutableStateFlow(AppSettings())
     private val progress = mutableMapOf<Pair<String, String>, ReadingProgress>()
+    private val tagsCache = linkedMapOf<String, TagMetadata>()
+
+    override suspend fun updateBlockedTags(transform: (Set<String>) -> Set<String>) {
+        settingsState.update { it.copy(blockedTags = transform(it.blockedTags)) }
+    }
+
+    override suspend fun tagMetadata(comicId: String): TagMetadata? {
+        val metadata = tagsCache.remove(comicId) ?: return null
+        tagsCache[comicId] = metadata
+        return metadata
+    }
+
+    override suspend fun saveTagMetadata(metadata: TagMetadata) {
+        tagsCache.remove(metadata.comicId)
+        tagsCache[metadata.comicId] = metadata
+        while (tagsCache.size > 2000) tagsCache.remove(tagsCache.keys.first())
+    }
     private var recommendationsCache: List<ComicSummary>? = null
     private var randomComicsCache: List<ComicSummary>? = null
     private var categoriesCache: List<ComicCategory>? = null
@@ -70,6 +88,7 @@ class InMemoryLibraryRepository : LibraryRepository {
     }
 
     override suspend fun clearCache() {
+        tagsCache.clear()
         recommendationsCache = null
         randomComicsCache = null
         categoriesCache = null

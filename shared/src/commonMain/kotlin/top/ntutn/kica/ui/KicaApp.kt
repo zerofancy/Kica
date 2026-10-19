@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import kotlin.time.Clock
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.DownloadCoordinator
+import top.ntutn.kica.data.ComicTagResolver
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
@@ -55,6 +57,8 @@ import top.ntutn.kica.resources.login_failed
 import top.ntutn.kica.resources.settings
 import top.ntutn.kica.ui.screen.LockScreen
 import top.ntutn.kica.ui.screen.PatternLockScreen
+import top.ntutn.kica.ui.screen.SearchPageState
+import top.ntutn.kica.ui.screen.LocalSearchPages
 import top.ntutn.kica.ui.state.LocalTitleTranslationService
 import top.ntutn.kica.ui.state.WindowLayout
 import top.ntutn.kica.ui.state.classifyWindow
@@ -87,12 +91,25 @@ fun KicaApp(
     val session by picaRepository.session.collectAsState()
     val settings by libraryRepository.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
     val scope = rememberCoroutineScope()
+    val tagResolver = remember(picaRepository, libraryRepository) {
+        ComicTagResolver(picaRepository, libraryRepository, scope)
+    }
     var locked by remember { mutableStateOf(false) }
     var backgroundSince by remember { mutableLongStateOf(0L) }
     var lockInitialized by remember { mutableStateOf(false) }
     val lockPasswordHash = settings.lockPasswordHash
     val lockPatternHash = settings.lockPatternHash
     val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
+    val pageHolder = rememberSaveableStateHolder()
+    val searchPages = remember { mutableMapOf<String, SearchPageState>() }
+    val retainedPages = remember { mutableSetOf<String>() }
+    LaunchedEffect(backStack.toList()) {
+        val active = backStack.map { it.toString() }.toSet()
+        (retainedPages - active).forEach { pageHolder.removeState(it) }
+        retainedPages.clear()
+        retainedPages.addAll(active)
+        searchPages.keys.retainAll(active)
+    }
     val navigateBack = {
         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
     }
@@ -147,7 +164,12 @@ fun KicaApp(
     }
 
     val readerActive = session != null && backStack.lastOrNull() is AppRoute.Reader
-    CompositionLocalProvider(LocalTitleTranslationService provides titleTranslationService) {
+    CompositionLocalProvider(
+        LocalTitleTranslationService provides titleTranslationService,
+        LocalTagResolver provides tagResolver,
+        LocalTagLibrary provides libraryRepository,
+        LocalSearchPages provides searchPages,
+    ) {
         KicaFluentTheme(
             preference = settings.theme,
             forceDarkSystemBars = readerActive,
@@ -200,23 +222,25 @@ fun KicaApp(
                         }
                     }
                     val routeContent: @Composable () -> Unit = {
-                        RouteContent(
-                            route = route,
-                            picaRepository = picaRepository,
-                            libraryRepository = libraryRepository,
-                            randomComicsLoader = randomComicsLoader,
-                            downloadCoordinator = downloadCoordinator,
-                            platformServices = platformServices,
-                            onNavigate = navigate,
-                            onBack = navigateBack,
-                            onLogout = {
-                                scope.launch {
-                                    picaRepository.logout()
-                                    backStack.clear()
-                                    backStack.add(AppRoute.Home)
-                                }
-                            },
-                        )
+                        pageHolder.SaveableStateProvider(route.toString()) {
+                            RouteContent(
+                                route = route,
+                                picaRepository = picaRepository,
+                                libraryRepository = libraryRepository,
+                                randomComicsLoader = randomComicsLoader,
+                                downloadCoordinator = downloadCoordinator,
+                                platformServices = platformServices,
+                                onNavigate = navigate,
+                                onBack = navigateBack,
+                                onLogout = {
+                                    scope.launch {
+                                        picaRepository.logout()
+                                        backStack.clear()
+                                        backStack.add(AppRoute.Home)
+                                    }
+                                },
+                            )
+                        }
                     }
                     if (route is AppRoute.Reader) {
                         routeContent()

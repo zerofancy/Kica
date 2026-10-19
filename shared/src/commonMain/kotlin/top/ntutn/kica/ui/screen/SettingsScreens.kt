@@ -106,6 +106,7 @@ internal fun SettingsScreen(
 ) {
     val settingsValue: AppSettings by library.settings().collectAsState(initial = AppSettings())
     val titleTranslationService = LocalTitleTranslationService.current
+    val tagResolver = top.ntutn.kica.ui.LocalTagResolver.current
     val translationState = titleTranslationService?.state?.collectAsState()?.value
         ?: TitleTranslationState.Disabled
     val translationModelAvailable by produceState(false, titleTranslationService, translationState) {
@@ -147,22 +148,8 @@ internal fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
         SectionTitle(stringResource(Res.string.settings))
-        SettingCard(stringResource(Res.string.theme)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemePreference.entries.forEach { preference ->
-                    val label = when (preference) {
-                        ThemePreference.SYSTEM -> Res.string.theme_system
-                        ThemePreference.LIGHT -> Res.string.theme_light
-                        ThemePreference.DARK -> Res.string.theme_dark
-                    }
-                    FluentChip(
-                        selected = settingsValue.theme == preference,
-                        onClick = { scope.launch { library.updateSettings(settingsValue.copy(theme = preference)) } },
-                        label = { Text(stringResource(label)) },
-                    )
-                }
-            }
-        }
+        ThemeSettingsCard(library)
+        TagBlockSettingsEntry(library)
         SettingCard(stringResource(Res.string.lock_screen)) {
             Text(
                 stringResource(Res.string.lock_screen_description),
@@ -401,6 +388,7 @@ internal fun SettingsScreen(
             FluentButton(onClick = {
                 scope.launch {
                     library.clearCache()
+                    tagResolver?.clearMemoryCache()
                     titleTranslationService?.clearCache()
                 }
             }) {

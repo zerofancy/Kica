@@ -4,6 +4,7 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
@@ -27,6 +28,32 @@ class SqlLibraryRepository(
     },
 ) : LibraryRepository {
     private val queries = database.kicaQueries
+    private val tagQueries = database.tagCacheQueries
+
+    override suspend fun tagMetadata(comicId: String): TagMetadata? = withContext(Dispatchers.Default) {
+        val row = tagQueries.selectTags(comicId).executeAsOneOrNull() ?: return@withContext null
+        val tags = runCatching { json.decodeFromString<List<String>>(row.tags_json) }.getOrNull() ?: return@withContext null
+        tagQueries.touchTags(kotlin.time.Clock.System.now().toEpochMilliseconds(), comicId)
+        TagMetadata(comicId, tags, row.verified_at)
+    }
+
+    override suspend fun saveTagMetadata(metadata: TagMetadata): Unit = withContext(Dispatchers.Default) {
+        tagQueries.transaction {
+            tagQueries.upsertTags(
+                metadata.comicId, json.encodeToString(metadata.tags), metadata.verifiedAt,
+                kotlin.time.Clock.System.now().toEpochMilliseconds(),
+            )
+            tagQueries.trimTags()
+        }
+    }
+
+    override suspend fun updateBlockedTags(transform: (Set<String>) -> Set<String>) {
+        queries.transaction {
+            val current = queries.selectSetting(SETTINGS_KEY).executeAsOneOrNull()
+                ?.let { json.decodeFromString<AppSettings>(it) } ?: AppSettings()
+            queries.upsertSetting(SETTINGS_KEY, json.encodeToString(current.copy(blockedTags = transform(current.blockedTags))))
+        }
+    }
 
     override fun history(): Flow<List<HistoryEntry>> =
         queries.selectHistory().asFlow().mapToList(Dispatchers.Default).map { rows ->
@@ -159,6 +186,7 @@ class SqlLibraryRepository(
             queries.deleteSetting(RANDOM_COMICS_CACHE_KEY)
             queries.deleteSetting(CATEGORIES_CACHE_KEY)
             queries.clearTitleTranslationCache()
+            tagQueries.clearTags()
         }
     }
 

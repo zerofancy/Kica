@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,8 +46,15 @@ import top.ntutn.kica.resources.loading
 import top.ntutn.kica.resources.offline_message
 import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.tap_to_retry
+import top.ntutn.kica.resources.tags_filtered_empty
+import top.ntutn.kica.resources.tags_filtered_page
+import top.ntutn.kica.resources.tags_unverified_page
+import top.ntutn.kica.resources.tags_empty_page
 import top.ntutn.kica.ui.state.translatedTitle
 import top.ntutn.kica.ui.PlatformVerticalScrollbar
+import top.ntutn.kica.ui.LocalTagLibrary
+import top.ntutn.kica.ui.rememberComicFilter
+import top.ntutn.kica.ui.ComicFilterNotice
 
 @Composable
 fun <T> LoadStateContent(
@@ -110,29 +118,69 @@ fun ComicGrid(
     canLoadMore: Boolean = false,
     loadMoreError: String? = null,
     onLoadMore: () -> Unit = {},
+    pages: List<ComicGridPage> = emptyList(),
+    state: LazyGridState = rememberLazyGridState(),
 ) {
-    if (comics.isEmpty()) {
+    val library = LocalTagLibrary.current
+    if (library == null) {
+        RawComicGrid(comicGridEntries(comics, pages), onComicClick, modifier, loadingMore, canLoadMore,
+            loadMoreError, onLoadMore, pages.lastOrNull()?.number ?: comics.size, state)
+        return
+    }
+    val filter = rememberComicFilter(comics, library)
+    RawComicGrid(
+        comicGridEntries(filter.visible, pages, filter.hiddenIds, filter.unknownIds),
+        onComicClick, modifier, loadingMore,
+        canLoadMore && filter.pending == 0, loadMoreError, onLoadMore,
+        pages.lastOrNull()?.number ?: comics.size,
+        state,
+    ) {
+        Column {
+            ComicFilterNotice(filter, library)
+            if (comics.isNotEmpty() && filter.visible.isEmpty()) {
+                Text(stringResource(Res.string.tags_filtered_empty))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RawComicGrid(
+    entries: List<ComicGridEntry>,
+    onComicClick: (ComicSummary) -> Unit,
+    modifier: Modifier,
+    loadingMore: Boolean,
+    canLoadMore: Boolean,
+    loadMoreError: String?,
+    onLoadMore: () -> Unit,
+    paginationToken: Int,
+    gridState: LazyGridState,
+    header: (@Composable () -> Unit)? = null,
+) {
+    if (entries.isEmpty() && !loadingMore && loadMoreError == null && header == null) {
         EmptyContent(modifier)
         return
     }
-    val gridState = rememberLazyGridState()
     val currentCanLoadMore by rememberUpdatedState(canLoadMore)
     val currentLoadingMore by rememberUpdatedState(loadingMore)
     val currentLoadMoreError by rememberUpdatedState(loadMoreError)
     val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    val currentToken by rememberUpdatedState(paginationToken)
+    val currentEntryCount by rememberUpdatedState(entries.size + if (header == null) 0 else 1)
     LaunchedEffect(gridState) {
         snapshotFlow {
             val layoutInfo = gridState.layoutInfo
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            shouldLoadMore(
+            val load = layoutInfo.totalItemsCount >= currentEntryCount && shouldLoadMore(
                 totalItemsCount = layoutInfo.totalItemsCount,
                 lastVisibleItemIndex = lastVisibleIndex,
                 canLoadMore = currentCanLoadMore,
                 loadingMore = currentLoadingMore,
                 hasLoadMoreError = currentLoadMoreError != null,
             )
-        }.distinctUntilChanged().collect { shouldLoad ->
-            if (shouldLoad) currentOnLoadMore()
+            if (load) currentToken else null
+        }.distinctUntilChanged().collect { token ->
+            if (token != null) currentOnLoadMore()
         }
     }
     Box(modifier.fillMaxSize()) {
@@ -143,8 +191,28 @@ fun ComicGrid(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(comics, key = { it.id }) { comic ->
-                ComicCard(comic, onComicClick)
+            if (header != null) item(key = "filter-status", span = { GridItemSpan(maxLineSpan) }) { header() }
+            if (entries.isEmpty() && !loadingMore && loadMoreError == null) {
+                item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                    Text(stringResource(Res.string.empty), Modifier.padding(24.dp))
+                }
+            }
+            items(
+                entries,
+                key = { it.key },
+                span = { GridItemSpan(if (it is ComicGridEntry.Comic) 1 else maxLineSpan) },
+            ) { entry ->
+                when (entry) {
+                    is ComicGridEntry.Comic -> ComicCard(entry.comic, onComicClick)
+                    is ComicGridEntry.Page -> FluentCard(Modifier.fillMaxWidth()) {
+                        val message = when (entry.status) {
+                            PageStatus.FILTERED -> Res.string.tags_filtered_page
+                            PageStatus.UNVERIFIED -> Res.string.tags_unverified_page
+                            PageStatus.EMPTY -> Res.string.tags_empty_page
+                        }
+                        Text(stringResource(message, entry.number), Modifier.padding(20.dp))
+                    }
+                }
             }
             if (loadingMore) {
                 item(span = { GridItemSpan(maxLineSpan) }) {

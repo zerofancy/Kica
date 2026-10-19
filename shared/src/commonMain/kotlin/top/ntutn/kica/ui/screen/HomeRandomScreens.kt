@@ -60,7 +60,8 @@ import top.ntutn.kica.resources.random_comics
 import top.ntutn.kica.resources.recommended
 import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.shuffle_batch
-import top.ntutn.kica.ui.filterBlockedSummaries
+import top.ntutn.kica.ui.ComicFilterNotice
+import top.ntutn.kica.ui.rememberComicFilter
 import top.ntutn.kica.ui.RandomComicsLoader
 import top.ntutn.kica.ui.component.ComicCard
 import top.ntutn.kica.ui.component.ComicGrid
@@ -85,8 +86,6 @@ internal fun HomeScreen(
 ) {
     var recommendationsRefresh by remember { mutableIntStateOf(0) }
     val loadFailed = stringResource(Res.string.load_failed)
-    val settings by library.settings().collectAsState(initial = AppSettings())
-    val blocked = settings.blockedCategories
     val recommendationsState by produceState<LoadState<List<ComicSummary>>>(
         initialValue = LoadState.Loading,
         key1 = recommendationsRefresh,
@@ -108,6 +107,10 @@ internal fun HomeScreen(
     }
     val randomState = randomLoader.state
     val gridState = rememberLazyGridState()
+    val recommendationsFilter = rememberComicFilter(
+        (recommendationsState as? LoadState.Data)?.value.orEmpty(), library,
+    )
+    val randomFilter = rememberComicFilter(randomState.items.orEmpty(), library)
 
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
@@ -123,10 +126,13 @@ internal fun HomeScreen(
             }
             when (val value = recommendationsState) {
                 is LoadState.Data -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    HorizontalComicRow(
-                        comics = value.value.filterBlockedSummaries(blocked),
-                        onComicClick = onComicClick,
-                    )
+                    Column {
+                        ComicFilterNotice(recommendationsFilter, library)
+                        HorizontalComicRow(
+                            comics = recommendationsFilter.visible,
+                            onComicClick = onComicClick,
+                        )
+                    }
                 }
                 is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
                     ErrorCard(value.message) { recommendationsRefresh++ }
@@ -161,7 +167,10 @@ internal fun HomeScreen(
                         RandomRefreshError(message, randomLoader::refresh)
                     }
                 }
-                val visibleRandom = randomState.items.filterBlockedSummaries(blocked)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ComicFilterNotice(randomFilter, library)
+                }
+                val visibleRandom = randomFilter.visible
                 if (visibleRandom.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Text(
@@ -191,8 +200,6 @@ internal fun RandomComicsScreen(
     onComicClick: (ComicSummary) -> Unit,
 ) {
     val state = loader.state
-    val settings by library.settings().collectAsState(initial = AppSettings())
-    val blocked = settings.blockedCategories
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(focusRequester) { focusRequester.requestFocus() }
@@ -239,7 +246,7 @@ internal fun RandomComicsScreen(
                     RandomRefreshError(message, loader::refresh)
                 }
                 ComicGrid(
-                    comics = items.filterBlockedSummaries(blocked),
+                    comics = items,
                     onComicClick = onComicClick,
                     modifier = Modifier.weight(1f),
                 )

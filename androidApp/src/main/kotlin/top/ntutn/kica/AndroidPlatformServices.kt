@@ -96,11 +96,11 @@ internal class AndroidPlatformServices(
         }.getOrDefault(false)
     }
 
-    private fun copyText(text: String): Boolean {
+    override suspend fun copyText(text: String): Boolean {
         if (text.isBlank()) return false
         return runCatching {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Kica image", text))
+            clipboard.setPrimaryClip(ClipData.newPlainText("Kica text", text))
             true
         }.getOrDefault(false)
     }

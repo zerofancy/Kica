@@ -82,6 +82,8 @@ internal fun DetailScreen(
     repository: PicaRepository,
     downloads: DownloadCoordinator,
     platformServices: PlatformServices,
+    library: top.ntutn.kica.data.LibraryRepository,
+    onTagSearch: (String) -> Unit,
     onBack: () -> Unit,
     onRead: (String) -> Unit,
 ) {
@@ -126,10 +128,11 @@ internal fun DetailScreen(
                         val compact = maxWidth < 600.dp
                         val tagsAndActions: @Composable () -> Unit = {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(stringResource(Res.string.categories))
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     comic.categories.forEach { FluentChip(false, {}, { Text(it) }) }
-                                    comic.tags.take(8).forEach { FluentChip(false, {}, { Text(it) }) }
                                 }
+                                ComicTags(comic.id, comic.tags, library, platformServices, onTagSearch)
                                 Row(
                                     modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),

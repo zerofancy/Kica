@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kica · 作品标签交互 Spec</title>
+  <style>
+    :root { color-scheme:light; --ink:#18283d; --muted:#5d6c80; --line:#dce4ef; --blue:#265dba; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#f3f6fa; font:16px/1.85 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1100px; margin:36px auto; padding:0 24px 48px; }
+    header { padding:36px; border-radius:20px; color:white; background:linear-gradient(120deg,#153357,#27667c); }
+    header p { color:#e1edf8; }
+    h1 { font-size:32px; line-height:1.4; margin:12px 0; }
+    h2 { font-size:23px; margin:0 0 14px; } h3 { font-size:18px; margin:22px 0 8px; }
+    section { margin-top:20px; padding:28px 32px; background:white; border:1px solid var(--line); border-radius:16px; }
+    p { margin:10px 0; } li { margin:6px 0; }
+    a { color:var(--blue); } header a { color:white; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:20px; }
+    .badge { display:inline-block; font-size:13px; padding:3px 12px; background:#ffffff24; border-radius:20px; }
+    .meta { color:var(--muted); font-size:14px; }
+    .note { background:#edf4ff; border-left:4px solid #3970be; padding:14px 18px; border-radius:5px; }
+    .decision { background:#fff6e7; border-left:4px solid #c48b28; padding:14px 18px; border-radius:5px; }
+    .table-wrap { overflow-x:auto; }
+    table { border-collapse:collapse; width:100%; font-size:15px; margin:14px 0; }
+    th,td { border-bottom:1px solid var(--line); padding:12px; text-align:left; vertical-align:top; }
+    th { background:#f1f5f9; } code { font-size:14px; overflow-wrap:anywhere; }
+    .preview { display:grid; grid-template-columns:150px 1fr; gap:24px; background:#f7f9fc; padding:24px; border-radius:12px; }
+    .cover { background:#dae6ed; border-radius:8px; display:grid; place-items:center; color:#536b80; min-height:210px; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .chip { border:1px solid #cdd9e7; border-radius:16px; background:white; padding:2px 12px; font-size:14px; }
+    .blocked { border-color:#c58c3b; color:#8a5b1b; background:#fff3df; }
+    .menu { display:inline-block; padding:10px 18px; background:white; border:1px solid #d2dce8; border-radius:8px; box-shadow:0 5px 16px #213c5510; margin-top:12px; }
+    .menu div { padding:3px 0; } .small { font-size:13px; color:var(--muted); }
+    footer { padding:20px 4px; color:var(--muted); font-size:14px; }
+    @media(max-width:650px) { main { margin:16px auto; padding:0 12px 24px; } header,section { padding:22px; } h1 { font-size:27px; } .preview { display:block; padding:18px; } .cover { min-height:90px; margin-bottom:16px; } }
+    @media print { body { background:white; font-size:11pt; } main { max-width:none; margin:0; padding:0; } header { color:var(--ink); background:white; padding:12px 0; } header p,header a { color:var(--muted); } section { border-radius:0; padding:18px 0; } tr,.preview { break-inside:avoid; } nav { display:none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="badge">SPEC · 已确认并实施 · v1</span>
+    <h1>作品标签：搜索、复制、完整展示与屏蔽</h1>
+    <p>让详情页标签成为可操作入口，并让屏蔽规则在浏览、搜索和本地列表中一致生效。</p>
+    <p>2026-10-20 · Android / Desktop · 已按此方案实施，验证范围见文末</p>
+    <nav aria-label="文档导航">
+      <a href="#review">Review 重点</a><a href="#interaction">交互设计</a><a href="#search">搜索语义</a>
+      <a href="#block">屏蔽规则</a><a href="#data">数据链路</a><a href="#acceptance">验收清单</a>
+    </nav>
+  </header>
+
+  <section id="review">
+    <h2>01 / 本次拟采用的方案</h2>
+    <ol>
+      <li><strong>单击标签直接搜索</strong>；右键、长按或明确的“更多操作”按钮打开复制／屏蔽菜单。</li>
+      <li><strong>详情页直接显示全部标签</strong>，自动换行，不再限制前 8 个；沿用详情页自身纵向滚动。</li>
+      <li><strong>标签屏蔽为本机持久化规则</strong>，与现有分类屏蔽独立配置，任一规则命中即隐藏。</li>
+      <li><strong>服务未返回标签时补查详情</strong>，只在存在标签屏蔽规则时启用；限制并发、缓存结果，明确区分“无标签”和“标签未知”。</li>
+    </ol>
+    <div class="decision"><strong>需要重点 Review：</strong>在线搜索使用现有关键词接口，不承诺标签精确搜索；启用屏蔽后，为避免遗漏，未知标签的作品在核验完成前不显示封面与标题；核验失败保留提示及重试入口。历史／下载提供临时显示被隐藏作品的入口，保证仍可管理已有记录和任务。</div>
+    <p class="meta">本期不增加标签订阅、云端同步、本地全站漫画数据库、多标签组合搜索或标题屏蔽。分类交互本期保持现有行为，视觉上与标签分组，避免混淆。</p>
+  </section>
+
+  <section>
+    <h2>02 / 现状与依据</h2>
+    <ul>
+      <li><code>DetailScreen.kt</code> 的分类和标签点击回调为空；标签使用 <code>take(8)</code> 截断。</li>
+      <li><code>ComicDetail</code> 有标签；<code>ComicSummary</code> 和网络列表映射没有保留标签；历史、下载及推荐缓存保存摘要 JSON。</li>
+      <li><code>AppSettings.blockedCategories</code> 与 <code>CategoryBlock.kt</code> 只处理分类。搜索结果目前在写入页面状态时过滤，解除屏蔽后无法仅靠重新过滤恢复已丢弃项目。</li>
+      <li>搜索已有 <code>AppRoute.Search(initialQuery, category)</code>；详情页尚未接入搜索导航和设置仓库。Android／桌面已有图片复制能力，文本复制方法尚未作为通用平台能力公开。</li>
+      <li><code>SettingsScreens.kt</code> 为 501 行存量豁免，<code>DiscoverScreens.kt</code> 已达 477 行；新增交互必须拆分职责，不能继续堆叠。</li>
+    </ul>
+    <p>上游参考快照：<code>tonquer/picacg-qt @ 41081746dc992d68cafbf9830ac3072315fd6454</code>。已核对标签点击、右键复制、本地标签字段搜索，以及分类／标签／标题屏蔽实现。</p>
+    <p><a href="https://github.com/tonquer/picacg-qt/blob/41081746dc992d68cafbf9830ac3072315fd6454/src/view/info/book_info_view.py#L707">标签交互</a> · <a href="https://github.com/tonquer/picacg-qt/blob/41081746dc992d68cafbf9830ac3072315fd6454/src/view/search/search_view.py#L392">搜索分流</a> · <a href="https://github.com/tonquer/picacg-qt/blob/41081746dc992d68cafbf9830ac3072315fd6454/src/component/widget/navigation_widget.py#L63">屏蔽匹配</a></p>
+    <p class="meta">依据为源码核查，尚未用真实账号验证服务端搜索匹配范围或各列表接口的标签完整性。开发阶段使用响应样本与可用的真实服务验证，并如实记录覆盖边界。</p>
+  </section>
+
+  <section id="interaction">
+    <h2>03 / 详情页交互</h2>
+    <div class="preview" aria-label="静态布局示意，不是可操作的应用">
+      <div class="cover">作品封面</div>
+      <div>
+        <strong>作品标题</strong><p class="small">作者 · 状态 · 简介摘要</p>
+        <p class="small">分类</p><div class="chips"><span class="chip">分类 A</span><span class="chip">分类 B</span></div>
+        <p class="small">标签 · 10　　标签操作 ▾</p>
+        <div class="chips">
+          <span class="chip">科幻</span><span class="chip">冒险</span><span class="chip blocked">悬疑 · 已屏蔽</span>
+          <span class="chip">长篇</span><span class="chip">彩色</span><span class="chip">校园</span>
+          <span class="chip">日常</span><span class="chip">奇幻</span><span class="chip">旅行</span><span class="chip">群像</span>
+        </div>
+        <div class="menu"><strong>悬疑</strong><div>搜索此标签</div><div>复制标签</div><div>解除屏蔽</div></div>
+        <p class="small">示意：全部标签自动换行；已屏蔽标签保留在当前详情，便于解除。</p>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>动作</th><th>Desktop</th><th>Android</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>搜索</td><td>左键单击；聚焦后 Enter／Space</td><td>点按标签</td><td>关闭临时菜单，压入搜索页，自动执行首次搜索。</td></tr>
+        <tr><td>标签菜单</td><td>右键；聚焦后菜单键／Shift+F10</td><td>长按</td><td>显示“搜索此标签、复制标签、屏蔽此标签／解除屏蔽”。不同时触发搜索。</td></tr>
+        <tr><td>显式操作入口</td><td colspan="2">标签标题行“标签操作”按钮 → 选择标签 → 显示上述动作</td><td>覆盖不便右键／长按及辅助功能用户；仍能操作全部标签。</td></tr>
+        <tr><td>复制</td><td colspan="2">写入系统纯文本剪贴板</td><td>复制当前显示的完整标签，不带数量、装饰符或引号；成功提示“已复制标签”，失败提示“复制失败，请重试”。</td></tr>
+        <tr><td>屏蔽／解除</td><td colspan="2">菜单中单次操作，即时保存</td><td>成功后提示、更新标签标记；失败保持原状态并提示重试；保存期间防重复提交。</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li>分类和标签分成两组，标签数量仅统计清理后的有效标签；去除空白项、按匹配键去重、保留上游顺序及首个显示文本。无标签时显示“暂无标签”，隐藏操作按钮。</li>
+      <li>长标签允许换行，标签及文本不超出可用宽度；复制和搜索始终使用完整值。无需横向滚动或 tooltip 才能读取完整内容。</li>
+      <li>保留现有 <code>600.dp</code> 响应式边界：窄屏标签和按钮位于封面信息下方，宽屏留在右侧；标签增长自然增加详情页高度。</li>
+      <li>屏蔽当前作品的标签不会突然退出详情、取消下载或中断阅读。详情显示“此作品命中标签屏蔽规则”及“管理屏蔽标签”入口；仍可搜索、复制和解除屏蔽。</li>
+    </ul>
+  </section>
+
+  <section id="search">
+    <h2>04 / 搜索语义与导航</h2>
+    <div class="note">“搜索此标签”表示把标签作为关键词进行在线搜索。结果可能匹配标题或其他字段；界面必须显示“以标签文字搜索，结果由服务返回”。本期不伪造精确标签搜索，也不在分页结果上做标签二次筛选来模拟全站精确查询。</div>
+    <ol>
+      <li>点击标签时，使用去除首尾空白后的完整文本填入现有搜索框，清空分类筛选；不自动转换简繁、不添加特殊搜索语法。</li>
+      <li>搜索页增加来源标识“来自标签：xxx”，附上范围说明。用户编辑关键词并提交后变为普通关键词搜索，来源标识消失。</li>
+      <li>连续点击同一标签只压入一个搜索页；快速切换不同标签时以最后一个导航意图为准。旧请求不得覆盖新的关键词或分页结果。</li>
+      <li>搜索可继续分页、失败重试、点击作品进详情；返回时依次回到原搜索结果、原作品详情，恢复原详情的滚动位置与全部标签布局。</li>
+      <li>被屏蔽标签仍可搜索；屏蔽规则持续作用于结果。页面提示“部分结果可能被屏蔽”，提供管理入口；搜索动作本身不自动解除规则。</li>
+    </ol>
+  </section>
+
+  <section id="block">
+    <h2>05 / 屏蔽匹配、作用范围与管理</h2>
+    <h3>匹配契约</h3>
+    <p>新增 <code>blockedTags: Set&lt;String&gt; = emptySet()</code>，独立于 <code>blockedCategories</code>。标签键按 <code>trim + lowercase</code> 生成，比较完整标签，任一标签命中即可屏蔽；例如“科幻”不匹配“科幻冒险”，英文大小写视为同一标签。</p>
+    <p>本期不进行简繁、全半角或同义词转换，显示文本保留原样；“悬疑”与“懸疑”需分别加入。该规则与上游的简繁统一不同，管理界面明确提示，避免引入未经验证的转换依赖。</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>区域</th><th>标签屏蔽行为</th></tr></thead>
+      <tbody>
+        <tr><td>首页推荐、随机、发现榜单、搜索、收藏</td><td>按分类 OR 标签规则过滤。分类目录本身仍只受分类屏蔽控制；不修改服务端收藏状态。</td></tr>
+        <tr><td>历史记录、下载列表</td><td>默认按同一规则隐藏；显示“已隐藏 N 项”及“临时显示隐藏项”开关，被隐藏作品可带原因标记展开。开关只在当前页面有效，离开后重置。</td></tr>
+        <tr><td>下载任务与文件</td><td>屏蔽仅影响默认展示，不删除文件、不暂停任务；临时显示后可继续暂停、恢复、取消或进入既有离线阅读入口。</td></tr>
+        <tr><td>已打开详情与阅读器</td><td>不强制退出、不打断阅读；详情可解除屏蔽。从历史／下载主动显示隐藏项后，允许打开对应作品。</td></tr>
+      </tbody>
+    </table></div>
+    <h3>管理入口</h3>
+    <ul>
+      <li>设置增加“屏蔽标签（N）”入口；详情标签菜单及过滤提示可打开同一个管理对话框。</li>
+      <li>支持单条手动添加、搜索已有规则、移除规则、清空全部。输入按单个完整标签处理，不按逗号拆分；空输入禁用添加，重复输入提示“该标签已被屏蔽”。</li>
+      <li>移除单条即时生效；“清空全部”弹出确认，说明只清空标签规则。输入筛选仅影响管理列表显示，不改变规则。</li>
+      <li>所有变更保留其他设置，成功落盘后才反馈成功；设置流更新后，已加载的原始数据立即重新过滤。解除规则可恢复原项目和顺序，无需重新请求整页。</li>
+      <li>规则保存在本机，重启保留；不上传、不按账号同步；退出登录不清空，与现有本机设置归属一致。清理网络／标签缓存不能删除屏蔽规则。</li>
+    </ul>
+  </section>
+
+  <section id="data">
+    <h2>06 / 标签数据与缺失处理</h2>
+    <p><strong>原则：</strong>列表接口是否完整返回 tags 尚未验证，不能只给摘要增加空列表就宣称屏蔽已覆盖。数据必须表达“未知”和“已确认无标签”的区别。</p>
+    <ol>
+      <li>摘要增加可缺省的标签字段，建议 <code>tags: List&lt;String&gt;? = null</code>：字段缺失／格式异常为未知，合法空数组为已确认无标签。保留列表返回的有效标签，详情转摘要时携带标签。</li>
+      <li>详情响应的标签作为权威数据：合法空数组确认无标签；缺字段／格式异常仍为未知。不同来源不以“未知”覆盖已知缓存；一次真实刷新所得权威标签可替换旧值。</li>
+      <li>新增轻量标签元数据缓存（作品 ID、标签 JSON、核验时间），通过共享仓库读写；持久化采用独立 SQLDelight 表及下一版迁移。已有历史、下载 JSON 缺字段时可继续解码，不丢记录。</li>
+      <li>标签屏蔽为空时不因本功能额外请求详情。已有分类规则先过滤；无需核验已被分类屏蔽的作品。</li>
+      <li>存在标签规则时，对当前已请求页／本地当前可见批次解析标签：优先使用有效元数据缓存，再使用列表有效标签；未知项按作品 ID 合并补查详情，全局最多 3 个并发，不请求章节或图片。</li>
+      <li>补查期间未知项不显示作品封面和标题，列表显示“正在核验标签”；已确认且未命中的项目可先展示，原始数据顺序保持稳定。</li>
+      <li>补查失败／离线未知项保持隐藏，提示“有 N 部作品标签未能核验”，支持重试；不能将失败保存为已确认无标签。历史／下载的临时显示入口仍可访问这些项目，并注明“标签未核验”。</li>
+      <li>缓存有效期 7 天、最多 2000 部作品，按最近使用淘汰。在线过期后重新核验；离线可使用旧标签并显示“使用缓存标签”提示，完全无缓存仍为未知。空标签也是可缓存结果。</li>
+      <li>同一页面失败不自动无限重试；手动重试或下一次页面加载才重试。页面退出、关键词变化时取消不再需要的请求；共享请求只在没有消费者后取消，旧响应不更新新页面状态。</li>
+    </ol>
+    <p class="meta">这一设计增加的是标签缓存，不是上游完整漫画数据库。缓存可能与服务端新编辑的标签存在最多 7 天差异；屏蔽属于浏览偏好，不构成内容隔离保证。开发前用响应样本验证标签数组完整性；若发现接口只返回部分标签，该来源统一按未知处理。</p>
+  </section>
+
+  <section>
+    <h2>07 / 分页、空态与返回约束</h2>
+    <ul>
+      <li>各列表保存未过滤的已加载数据，展示结果由最新规则派生。原始页码和总页数沿用服务响应，不按过滤后数量重算，也不把缓存写成过滤后的子集。</li>
+      <li>追加新页时复用已有作品的标签核验结果，只核验新增或数据变化的作品；加载指示、核验状态变化和追加结果不得使已有卡片短暂消失。筛选状态提示与作品共用同一滚动列表，避免提示栏高度变化带动视口移动，并保持当前首项及像素偏移。</li>
+      <li>保留无限滚动加载。整页作品全部命中屏蔽规则时，在该页原始位置插入全宽特殊项：“已加载第 N 页，该页作品已全部被过滤”。特殊项参与列表布局与滚动，滚动接近末尾时继续自动加载后续页。</li>
+      <li>每次只请求一个后续页；连续整页过滤时逐页插入提示项，不跳页、不并发重复请求。失败时停止自动加载并保留重试入口，重试仍请求同一页。未核验页和空页使用独立提示，不能冒充被过滤页；核验过程中暂停自动加载，解除规则后恢复作品并移除相应提示项。本地历史／下载也自动推进核验批次，无需点击下一页。</li>
+      <li>管理入口显示可统计范围内的数量：只统计已加载数据，不冒充全站隐藏数量。未知项与确定命中项分别计数。</li>
+      <li>Android 返回键／返回手势和桌面 Esc 均通过 <code>PlatformBackHandler</code>：清空确认 → 管理对话框 → 标签操作菜单／选择器 → 搜索子页 → 原详情 → 上一级。只关闭当前最上层交互，一次不跨两层。</li>
+      <li>界面返回与系统返回复用导航回调；根页面无可返回内容时不拦截退出。关闭菜单后焦点回到触发控件，键盘焦点可见，按钮具备标签名称和动作说明。</li>
+      <li>详情、管理列表、标签选择器等溢出区域必须在桌面提供同状态、可拖动、仅实际可滚动时显示的滚动条；普通标签使用换行，不创建嵌套滚动区。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>08 / 实现边界与文件职责</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>职责</th><th>拟调整范围</th></tr></thead>
+      <tbody>
+        <tr><td>标签清理、匹配、过滤状态</td><td>独立共享模块／文件；保留现有分类行为，统一输出可见、命中、未知三类状态。</td></tr>
+        <tr><td>详情标签组件与菜单</td><td>从 DetailScreen 拆出组件；注入搜索导航、规则管理及设置访问，复用公共菜单和返回处理。</td></tr>
+        <tr><td>屏蔽管理</td><td>新建独立对话框；设置页仅放入口。先按职责拆出设置页现有区块，避免增长 501 行豁免文件。</td></tr>
+        <tr><td>网络与持久化</td><td>RealPicaRepository 列表映射、ComicSummary／AppSettings、SqlLibraryRepository 及内存实现、SQLDelight 缓存与迁移；不增加服务端屏蔽接口。</td></tr>
+        <tr><td>标签核验与列表状态</td><td>共享解析器统一并发、缓存及去重；首页／随机／榜单／搜索／收藏／历史／下载接入，避免每个页面独立发起补查。</td></tr>
+        <tr><td>剪贴板与资源</td><td>公开通用文本复制平台能力或使用已验证的 Compose 统一 API；两端一致反馈。新增文案进入现有资源体系，不新增文件共享或 FileProvider 路径。</td></tr>
+      </tbody>
+    </table></div>
+    <p>所有新增／修改文本文件维持 500 行限制，优先职责拆分；不扩大存量豁免，不修改忽略规则。实现已按上述职责拆分。</p>
+  </section>
+
+  <section id="acceptance">
+    <h2>09 / 验收清单</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>维度</th><th>必须通过的场景</th></tr></thead>
+      <tbody>
+        <tr><td>完整展示</td><td>0／1／8／9／50 个标签、重复／空白／长标签；窄屏与宽屏布局；所有有效标签可读、可操作，无水平溢出。</td></tr>
+        <tr><td>搜索与复制</td><td>点按直达自动搜索；特殊符号和完整文本正确传递；右键／长按不误触搜索；复制成功／系统拒绝反馈；快速重复操作无重复导航。</td></tr>
+        <tr><td>规则管理</td><td>添加、重复、移除、清空确认／取消、重启保留、写入失败；完整词、大小写、首尾空白、简繁差异均符合契约；其他设置不被覆盖。</td></tr>
+        <tr><td>标签核验</td><td>字段缺失与合法空数组区分；详情缺字段／失败不误存空标签；并发上限、请求合并、缓存有效／过期／淘汰、离线已知／未知、取消和旧响应隔离。</td></tr>
+        <tr><td>跨列表一致性</td><td>推荐、随机、榜单、搜索、收藏、历史、下载都检查；加规则即时隐藏、解除即时恢复原顺序；当前详情与阅读不中断，下载文件和任务状态不变。</td></tr>
+        <tr><td>分页与空态</td><td>整页过滤按原页位置插入特殊项，连续过滤页可继续无限滚动；未核验／空页独立提示；请求失败停止自动加载且重试不跳页；清空规则恢复原始作品和顺序。</td></tr>
+        <tr><td>升级兼容</td><td>旧摘要 JSON、旧 AppSettings、现有数据库升级到新缓存表；历史、进度、下载、分类规则完整保留；缓存和屏蔽规则可独立清理。</td></tr>
+        <tr><td>真实交互</td><td>Android 点按／长按／系统返回及手势；桌面鼠标、键盘菜单、Esc、焦点恢复、可拖动滚动条；确认弹窗与管理对话框的返回优先级。</td></tr>
+      </tbody>
+    </table></div>
+    <p>自动化重点：匹配与去重、序列化与数据库迁移、网络映射、核验并发／失败、规则变化恢复原始列表及分页竞态。GUI 验证与自动化结果分别记录，未验证的平台明确列出。</p>
+    <p>开发完成后运行针对性测试及 <code>python3 scripts/check_file_lines.py</code>、<code>git diff --check</code>，并验证 Android／桌面编译；按实际可用环境完成双端交互验收。</p>
+  </section>
+  <section>
+    <h2>10 / 实施与验证记录</h2>
+    <p>已完成完整标签展示、点击关键词搜索、右键／长按及键盘菜单、文本复制、标签屏蔽管理、缺失标签补查与缓存、跨列表过滤和导航状态恢复。设置主题区块拆出后，原 501 行设置文件降至 500 行以内。</p>
+    <ul>
+      <li>共享桌面测试：58 项，57 通过、1 项既有阅读器窗口测试按其独立开关跳过；网络模块测试：15 项通过。五项新增标签／过滤／分页／滚动／搜索状态窗口测试已实际启用。</li>
+      <li>桌面窗口验证使用独立 Xephyr 显示环境，关闭垂直同步并使用软件渲染，避免虚拟显示器刷新时钟阻塞重组；包含点击搜索、右键复制／屏蔽、键盘 Shift+F10 解除屏蔽、Esc 层级、窄窗口标签换行。</li>
+      <li>过滤窗口测试确认：无规则不额外补查；未知项核验前隐藏；核验后出现；解除屏蔽立即按原顺序恢复，无需重拉列表。</li>
+      <li>分页交互按后续反馈调整为无限加载。新增测试覆盖连续过滤页原位占位、解除规则恢复作品、未知／空／重复页的区别，以及自动跨过滤页、错误暂停、同页重试与到达末页停止。</li>
+      <li>滚动回归测试覆盖触底加载开始、新页标签仍在核验及核验结束三个阶段：首项键及滚动偏移保持一致，旧作品不重复查询标签。</li>
+      <li>审查补充搜索状态回归：已完成关键词 A 后切换到仍在加载的 B，再切回 A，不会因旧完成标记卡在加载态；离开并返回已完成结果不重复请求。</li>
+      <li>自动化覆盖标签清理／匹配、旧 JSON 兼容、缓存有效／过期／失败回退、并发上限与共享请求取消、数据库 1／2 → 3 迁移、2000 条缓存上限及规则保留。</li>
+      <li>SQLDelight 独立迁移校验通过；版本 2 的空数据库 schema 基线以 shared/databases/2.sql 纯文本保存。Gradle 在迁移检查前通过现有 SQLite JDBC 依赖生成 shared/build/generated/migration-baselines/2.db；二进制仅为构建产物，不提交到 Git。</li>
+      <li>Android Debug 与桌面应用 Kotlin 编译通过；文件行数检查与 diff 空白检查通过。</li>
+      <li>Android lint 尝试执行但被既有依赖配置阻塞：shared 使用 compileSdk 36，androidx.core 1.19.1 要求 API 37；本次不扩展修改 SDK／依赖版本。</li>
+      <li>环境边界：ADB 无连接设备，Android 点按／长按、系统返回键与返回手势尚未实机验证；未使用真实账号验证线上标签完整性和搜索匹配范围。缓存与网络行为测试使用合成响应。</li>
+    </ul>
+    <p><code>./gradlew :shared:desktopTest :networkJvm:test :androidApp:compileDebugKotlin :desktopApp:compileKotlin</code></p>
+    <p class="meta">窗口测试通过环境变量 KICA_TAG_WINDOW_TEST=1 启用。测试截图位于 shared/build/reports/comic-tags/，测试报告位于各模块 build/reports/tests/。</p>
+  </section>
+  <footer>本文件保留已确认的需求与行为契约；布局图为静态示意，实施验证范围与限制见第 10 节。</footer>
+</main>
+</body>
+</html>

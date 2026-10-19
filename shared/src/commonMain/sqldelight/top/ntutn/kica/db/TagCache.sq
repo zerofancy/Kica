@@ -1,0 +1,24 @@
+CREATE TABLE comic_tag_cache (
+    comic_id TEXT NOT NULL PRIMARY KEY,
+    tags_json TEXT NOT NULL,
+    verified_at INTEGER NOT NULL,
+    last_accessed_at INTEGER NOT NULL
+);
+
+selectTags:
+SELECT * FROM comic_tag_cache WHERE comic_id = ?;
+
+upsertTags:
+INSERT OR REPLACE INTO comic_tag_cache(comic_id, tags_json, verified_at, last_accessed_at)
+VALUES (?, ?, ?, ?);
+
+touchTags:
+UPDATE comic_tag_cache SET last_accessed_at = ? WHERE comic_id = ?;
+
+trimTags:
+DELETE FROM comic_tag_cache WHERE comic_id NOT IN (
+    SELECT comic_id FROM comic_tag_cache ORDER BY last_accessed_at DESC, comic_id LIMIT 2000
+);
+
+clearTags:
+DELETE FROM comic_tag_cache;
