@@ -53,7 +53,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Kica"
-            packageVersion = "0.1.1"
+            packageVersion = "0.1.2"
             description = "A Fluent cross-platform PicACG client"
             vendor = "ntutn"
             modules("java.net.http", "java.sql", "jdk.charsets", "jdk.security.auth")
