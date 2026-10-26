@@ -49,9 +49,9 @@ and image enhancement.
 
 ## Requirements
 
-- JDK 17
+- JDK 21 (the Gradle daemon toolchain)
 - Android Studio or Android SDK command-line tools
-- Android SDK Platform 36 and Build Tools compatible with AGP 9.1.1
+- Android SDK Platform 37 and Build Tools compatible with AGP 9.4.1
 - Windows x64 or Linux x64 for first-tier desktop builds
 
 The shared desktop sources remain compatible with macOS, but macOS packaging is
@@ -59,7 +59,7 @@ not part of the supported release or CI matrix.
 
 ## Build
 
-Use the checked-in Gradle 9.3.1 wrapper:
+Use the checked-in Gradle 9.8.1 wrapper:
 
 ```bash
 ./gradlew build
@@ -150,14 +150,18 @@ Create a Debian package on Linux:
 ./gradlew :desktopApp:packageDeb
 ```
 
-Create Android debug and unsigned release artifacts:
+Android Release signing uses the system keyring by default. Configure your
+existing keystore and initialize its passwords as described in the
+[keyring signing guide](docs/keyring-signing.html), then build signed artifacts:
 
 ```bash
-./gradlew :androidApp:assembleDebug :androidApp:assembleRelease :androidApp:bundleRelease
+./gradlew :androidApp:verifyReleaseSigning :androidApp:assembleRelease :androidApp:bundleRelease
 ```
 
-Release APK/AAB files are intentionally unsigned. Supply signing configuration
-outside the repository for production distribution.
+Signing passwords must not enter Gradle's configuration cache, so it is disabled
+by default. Before configuring credentials, use `-PkeyringSigning=false` for
+Debug builds, desktop builds, tests, or IDE sync. Explicitly disabling signing
+also makes Release artifacts unsigned; missing credentials otherwise fail the build.
 
 ## Security
 
