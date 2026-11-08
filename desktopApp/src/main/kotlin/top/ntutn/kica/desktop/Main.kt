@@ -1,18 +1,24 @@
 package top.ntutn.kica.desktop
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitDialogParent
+import java.awt.AWTException
 import java.awt.Dimension
+import java.awt.Robot
+import java.awt.Toolkit
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.system.exitProcess
 import org.jetbrains.compose.resources.painterResource
 import top.ntutn.kica.data.DefaultTitleTranslationService
 import top.ntutn.kica.data.SqlTitleTranslationCache
@@ -25,7 +31,29 @@ import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.kica_icon
 import top.ntutn.kica.ui.KicaApp
 
-fun main() = application {
+fun main() {
+    // Let Compose dispose the window while keeping the JVM alive to drain X11 events.
+    application(exitProcessOnExit = false) { KicaDesktopApp() }
+    drainX11Events()
+    exitProcess(0)
+}
+
+private fun drainX11Events() {
+    val toolkit = Toolkit.getDefaultToolkit()
+    if (toolkit.javaClass.name != "sun.awt.X11.XToolkit") return
+
+    // JVM shutdown can pause AWT in an X11 error callback while it holds the Xlib display lock.
+    // GLX needs that lock for native cleanup, so wait for both the X11 and AWT queues before exiting.
+    try {
+        Robot().waitForIdle()
+    } catch (_: AWTException) {
+        // If Robot is unavailable, still flush pending requests to the X server.
+        toolkit.sync()
+    }
+}
+
+@Composable
+private fun ApplicationScope.KicaDesktopApp() {
     val dataDirectory = remember {
         applicationDataDirectory().also {
             FileKit.init(appId = "top.ntutn.kica", filesDir = it.toFile())
