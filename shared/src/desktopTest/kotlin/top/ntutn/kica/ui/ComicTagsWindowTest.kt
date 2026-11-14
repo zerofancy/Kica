@@ -99,10 +99,10 @@ class ComicTagsWindowTest {
             assertEquals(0, backs.get())
             click(InputEvent.BUTTON3_DOWN_MASK, 50, 75)
             snapshot("tag-actions")
-            click(InputEvent.BUTTON1_DOWN_MASK, 150, 294)
+            click(InputEvent.BUTTON1_DOWN_MASK, 200, 263)
             assertEquals("Alpha", copied.get())
             click(InputEvent.BUTTON3_DOWN_MASK, 50, 75)
-            click(InputEvent.BUTTON1_DOWN_MASK, 150, 322)
+            click(InputEvent.BUTTON1_DOWN_MASK, 200, 305)
             assertEquals(setOf("Alpha"), runBlocking { library.settings().first().blockedTags })
             snapshot("blocked-tag")
             click(InputEvent.BUTTON3_DOWN_MASK, 50, 75)
@@ -114,7 +114,7 @@ class ComicTagsWindowTest {
             robot.delay(300)
             SwingUtilities.invokeAndWait { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
             robot.delay(300)
-            click(InputEvent.BUTTON1_DOWN_MASK, 150, 322)
+            click(InputEvent.BUTTON1_DOWN_MASK, 200, 305)
             assertTrue(runBlocking { library.settings().first().blockedTags.isEmpty() })
             SwingUtilities.invokeAndWait { window.setSize(400, 600) }
             snapshot("narrow-tags")

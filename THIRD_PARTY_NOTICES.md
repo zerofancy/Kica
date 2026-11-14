@@ -40,7 +40,8 @@ Dependencies can bring additional transitive components. Refer to Gradle
 dependency metadata and the corresponding upstream distributions for complete
 copyright statements and license texts.
 
-Compose Fluent UI: <https://github.com/compose-fluent/compose-fluent-ui>
+Compose Fluent UI: <https://github.com/compose-fluent/compose-fluent-ui>;
+Android/JVM fork: <https://github.com/zerofancy/compose-fluent-ui>
 
 Kotlin: <https://github.com/JetBrains/kotlin>
 

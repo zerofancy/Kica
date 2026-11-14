@@ -1,7 +1,7 @@
 [versions]
 kotlin = "2.4.21"
-compose-plugin = "1.9.3"
-compose-runtime = "1.8.2"
+compose-plugin = "1.12.2"
+compose-runtime = "1.12.2"
 compose-hot-reload = "1.0.0-beta03"
 compose-desktop-keep-kit = "v0.2.0"
 agp = "9.5.0"
@@ -20,7 +20,7 @@ slf4j = "2.0.20"
 logback = "1.6.6"
 jna = "5.19.1"
 filekit = "0.17.0"
-compose-fluent = "v0.1.0"
+compose-fluent = "0.2.0-dev-20261114.1"
 llamatik = "1.10.1"
 
 [libraries]
@@ -65,7 +65,7 @@ jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
 filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version.ref = "filekit" }
 
 # Compose
-compose-fluent = { module = "io.github.compose-fluent:fluent", version.ref = "compose-fluent" }
+compose-fluent = { module = "com.github.zerofancy.compose-fluent-ui:fluent", version.ref = "compose-fluent" }
 
 # Other
 llamatik-library = { module = "com.llamatik:library", version.ref = "llamatik" }

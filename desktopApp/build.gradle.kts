@@ -34,7 +34,7 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":networkJvm"))
-    implementation(compose.desktop.currentOs.substringBeforeLast(':') + ":" + libs.versions.compose.runtime.get())
+    implementation(compose.desktop.currentOs)
     implementation(libs.compose.resources)
     implementation(libs.sqldelight.sqlite.driver)
     implementation(libs.coil.network.okhttp)

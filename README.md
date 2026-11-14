@@ -51,11 +51,18 @@ and image enhancement.
 
 - JDK 21 (the Gradle daemon toolchain)
 - Android Studio or Android SDK command-line tools
-- Android SDK Platform 37 and Build Tools compatible with AGP 9.4.1
+- Android SDK Platform 37 and Build Tools compatible with AGP 9.5.0
 - Windows x64 or Linux x64 for first-tier desktop builds
 
 The shared desktop sources remain compatible with macOS, but macOS packaging is
 not part of the supported release or CI matrix.
+
+Compose Multiplatform uses plugin and core library version `1.12.2`. Fluent UI
+uses the Android/JVM fork
+[`zerofancy/compose-fluent-ui`](https://github.com/zerofancy/compose-fluent-ui)
+at the fixed JitPack version `0.2.0-dev-20261114.1` (commit
+`f32667f97c026c0abc65f6e6bc25b492f28b1966`). Its repository is scoped to the
+`com.github.zerofancy.compose-fluent-ui` group in `settings.gradle.kts`.
 
 ## Build
 

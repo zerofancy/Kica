@@ -103,8 +103,25 @@ class ReaderKeyboardWindowTest {
             try {
                 await("window focus") { onEdt { window.isFocused } }
                 awaitPage("e1", 0)
+                // A focused top-level window does not guarantee native keyboard focus in Compose.
+                // Click the reader body before sending shortcuts to the new window.
+                robot.mouseMove(window.x + window.width / 2, window.y + window.height / 2)
+                robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+                robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
                 robot.delay(250)
-                if (mode != ReaderMode.VERTICAL) {
+                if (mode == ReaderMode.VERTICAL) {
+                    // Drag the visible scrollbar and verify that it updates the reader's progress.
+                    val scrollbarX = window.x + window.width - window.insets.right - 4
+                    robot.mouseMove(scrollbarX, window.y + window.insets.top + 64)
+                    robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+                    robot.mouseMove(scrollbarX, window.y + window.height - window.insets.bottom - 15)
+                    robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+                    await("$mode scrollbar drag changes reading progress") {
+                        latest.get()?.let { it.episodeId == "e1" && it.pageIndex > 0 } == true
+                    }
+                    key(KeyEvent.VK_HOME)
+                    awaitPage("e1", 0)
+                } else {
                     val step = if (mode == ReaderMode.DOUBLE_LEFT_TO_RIGHT || mode == ReaderMode.DOUBLE_RIGHT_TO_LEFT) 2 else 1
                     // Repeated KEY_PRESSED events while physically held must remain one move.
                     repeat(5) { robot.keyPress(KeyEvent.VK_PAGE_DOWN); robot.delay(100) }

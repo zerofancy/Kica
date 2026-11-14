@@ -10,7 +10,6 @@ import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import top.ntutn.kica.model.ThemePreference
 import top.ntutn.kica.ui.PlatformSystemBars
-import top.ntutn.kica.ui.PlatformCompatibleTextContextMenu
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
@@ -35,9 +34,6 @@ fun KicaFluentTheme(
         colors = fluentColors,
         compactMode = true,
         useAcrylicPopup = false,
-    ) {
-        PlatformCompatibleTextContextMenu {
-            content()
-        }
-    }
+        content = content,
+    )
 }
