@@ -46,7 +46,7 @@
     <string name="proxy_host">代理主机</string>
     <string name="proxy_port">端口</string>
     <string name="about">关于</string>
-    <string name="about_text">Kica 0.1.0 · LGPL-3.0</string>
+    <string name="about_text">Kica 0.1.3 · LGPL-3.0</string>
     <string name="episodes">章节</string>
     <string name="favorite">收藏</string>
     <string name="unfavorite">取消收藏</string>
@@ -57,6 +57,12 @@
     <string name="pause">暂停</string>
     <string name="resume">继续</string>
     <string name="cancel">取消</string>
+    <string name="reader_progress_title">继续上次阅读？</string>
+    <string name="reader_progress_message">你上次读到「%1$s」第 %2$d 页。\n继续上次的位置，还是从本章开头开始？</string>
+    <string name="reader_continue">继续阅读</string>
+    <string name="reader_start_over">从头开始</string>
+    <string name="reader_progress_failed">无法读取阅读进度</string>
+    <string name="reader_progress_adjusted">章节页数已变化，已定位到可用页面</string>
     <string name="reader_vertical">纵向连续</string>
     <string name="reader_paged">单页横翻</string>
     <string name="reader_double">双页</string>

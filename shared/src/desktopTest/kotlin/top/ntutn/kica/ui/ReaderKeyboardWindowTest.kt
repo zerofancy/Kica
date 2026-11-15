@@ -162,13 +162,14 @@ class ReaderKeyboardWindowTest {
                 await("help closed") { robot.getPixelColor(window.x + window.width / 2, window.y + window.height / 2) == bodyPixel }
                 assertEquals(0, back.get())
                 if (mode == ReaderMode.VERTICAL) {
-                    val toolbarPixel = robot.getPixelColor(window.x + 140, window.y + 80)
+                    // Sample inside the toolbar, independently of the window manager's title-bar height.
+                    val toolbarPixel = robot.getPixelColor(window.x + 140, window.y + window.insets.top + 20)
                     key(KeyEvent.VK_TAB, shift = true)
                     key(KeyEvent.VK_SPACE)
-                    assertTrue(robot.getPixelColor(window.x + 140, window.y + 80) != toolbarPixel, "Space must activate focused hide-toolbar button")
+                    assertTrue(robot.getPixelColor(window.x + 140, window.y + window.insets.top + 20) != toolbarPixel, "Space must activate focused hide-toolbar button")
                     assertEquals(0, latest.get().pageIndex)
                     key(KeyEvent.VK_ESCAPE)
-                    assertEquals(toolbarPixel, robot.getPixelColor(window.x + 140, window.y + 80))
+                    assertEquals(toolbarPixel, robot.getPixelColor(window.x + 140, window.y + window.insets.top + 20))
                     key(KeyEvent.VK_TAB, shift = true)
                     key(KeyEvent.VK_TAB, shift = true)
                     key(KeyEvent.VK_F1)

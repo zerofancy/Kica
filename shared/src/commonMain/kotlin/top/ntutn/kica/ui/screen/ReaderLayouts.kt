@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
@@ -46,7 +47,7 @@ internal fun VerticalReader(
     keyboard: ReaderKeyboardController? = null,
     keyboardChangeChapter: (Boolean) -> Unit = onChangeChapter,
 ) {
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage.coerceIn(pages.indices))
     var ready by remember { mutableStateOf(false) }
     val startPage = remember { initialPage }
     val pageChanged = rememberUpdatedState(onPageChanged)
@@ -54,6 +55,8 @@ internal fun VerticalReader(
         if (pages.isNotEmpty()) {
             listState.scrollToItem(startPage.coerceIn(pages.indices))
             if (startPage == Int.MAX_VALUE) listState.scrollToReaderEnd()
+            // Do not save a candidate location before the positioned body has had a frame.
+            withFrameNanos { }
             ready = true
             snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect { pageChanged.value(it) }
         }
@@ -120,7 +123,7 @@ internal fun PagedReader(
     keyboard: ReaderKeyboardController? = null,
     keyboardChangeChapter: (Boolean) -> Unit = onChangeChapter,
 ) {
-    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerState = rememberPagerState(initialPage = initialPage.coerceIn(pages.indices), pageCount = { pages.size })
     val pagerModifier = Modifier
         .fillMaxSize()
         .focusProperties { canFocus = keyboard == null }
@@ -143,6 +146,8 @@ internal fun PagedReader(
     LaunchedEffect(pagerState, pages) {
         if (pages.isNotEmpty()) {
             pagerState.scrollToPage(startPage.coerceIn(pages.indices))
+            // Do not save a candidate location before the positioned body has had a frame.
+            withFrameNanos { }
             ready = true
             snapshotFlow { pagerState.currentPage }.distinctUntilChanged().collect { pageChanged.value(it) }
         }
@@ -174,7 +179,7 @@ internal fun DoubleReader(
     keyboardChangeChapter: (Boolean) -> Unit = onChangeChapter,
 ) {
     val pairs = remember(pages) { pages.chunked(2) }
-    val pagerState = rememberPagerState(pageCount = { pairs.size })
+    val pagerState = rememberPagerState(initialPage = (initialPage / 2).coerceIn(pairs.indices), pageCount = { pairs.size })
     val pagerModifier = Modifier
         .fillMaxSize()
         .focusProperties { canFocus = keyboard == null }
@@ -197,6 +202,8 @@ internal fun DoubleReader(
     LaunchedEffect(pagerState, pairs) {
         if (pairs.isNotEmpty()) {
             pagerState.scrollToPage((startPage / 2).coerceIn(pairs.indices))
+            // Do not save a candidate location before the positioned body has had a frame.
+            withFrameNanos { }
             ready = true
             snapshotFlow { pagerState.currentPage }.distinctUntilChanged().collect { pageChanged.value(it * 2) }
         }

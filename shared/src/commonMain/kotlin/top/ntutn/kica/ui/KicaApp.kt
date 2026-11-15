@@ -56,6 +56,8 @@ import top.ntutn.kica.resources.home
 import top.ntutn.kica.resources.login_failed
 import top.ntutn.kica.resources.settings
 import top.ntutn.kica.ui.screen.LockScreen
+import top.ntutn.kica.ui.screen.LocalReaderSessions
+import top.ntutn.kica.ui.screen.ReaderSessionMemory
 import top.ntutn.kica.ui.screen.PatternLockScreen
 import top.ntutn.kica.ui.screen.SearchPageState
 import top.ntutn.kica.ui.screen.LocalSearchPages
@@ -102,6 +104,7 @@ fun KicaApp(
     val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
     val pageHolder = rememberSaveableStateHolder()
     val searchPages = remember { mutableMapOf<String, SearchPageState>() }
+    val readerSessions = remember { mutableMapOf<AppRoute.Reader, ReaderSessionMemory>() }
     val retainedPages = remember { mutableSetOf<String>() }
     LaunchedEffect(backStack.toList()) {
         val active = backStack.map { it.toString() }.toSet()
@@ -109,6 +112,7 @@ fun KicaApp(
         retainedPages.clear()
         retainedPages.addAll(active)
         searchPages.keys.retainAll(active)
+        readerSessions.keys.retainAll(backStack.filterIsInstance<AppRoute.Reader>().toSet())
     }
     val navigateBack = {
         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
@@ -169,6 +173,7 @@ fun KicaApp(
         LocalTagResolver provides tagResolver,
         LocalTagLibrary provides libraryRepository,
         LocalSearchPages provides searchPages,
+        LocalReaderSessions provides readerSessions,
     ) {
         KicaFluentTheme(
             preference = settings.theme,

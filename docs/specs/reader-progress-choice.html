@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kica · 进入阅读前的进度选择 Spec</title>
+  <style>
+    :root { color-scheme:light; --ink:#18263a; --muted:#52627a; --line:#dce4ee; --blue:#285ac8; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f3f6fb; color:var(--ink); font:16px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1060px; margin:40px auto; padding:0 28px 60px; }
+    header { padding:38px; border-radius:20px; color:white; background:#19345c; }
+    header p { color:#dae6fa; margin-bottom:0; }
+    h1 { font-size:32px; line-height:1.4; margin:12px 0; }
+    h2 { font-size:23px; margin:0 0 16px; }
+    h3 { font-size:18px; margin:22px 0 8px; }
+    section { background:white; border:1px solid var(--line); border-radius:16px; padding:28px 32px; margin-top:22px; }
+    p { margin:10px 0; } li { margin:6px 0; }
+    .tag { display:inline-block; padding:3px 12px; border-radius:30px; font-size:13px; background:#ffffff20; }
+    .meta { color:var(--muted); font-size:14px; }
+    .callout { padding:14px 18px; background:#edf3ff; border-left:4px solid var(--blue); border-radius:5px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; margin:16px 0; font-size:15px; }
+    th,td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:12px; }
+    th { background:#f1f5fb; }
+    code { font-size:14px; overflow-wrap:anywhere; }
+    .mock { max-width:480px; margin:20px auto; padding:24px; background:#f8faff; border:1px solid var(--line); border-radius:14px; }
+    .actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:22px; }
+    .action { padding:7px 14px; border:1px solid var(--line); border-radius:8px; background:white; }
+    .primary { color:white; background:var(--blue); border-color:var(--blue); }
+    footer { padding:22px 6px; color:var(--muted); font-size:14px; }
+    @media(max-width:700px) { main { padding:0 14px 30px; margin:16px auto; } header,section { padding:22px; } h1 { font-size:27px; } }
+    @media print { body { background:white; font-size:11pt; } main { margin:0; padding:0; max-width:none; } header { color:var(--ink); background:white; padding:12px 0; } header p { color:var(--muted); } .tag { color:var(--blue); } section { border-radius:0; padding:18px 0; } tr { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="tag">SPEC · 已实施 · v1.1</span>
+    <h1>进入阅读前，选择是否继承进度</h1>
+    <p>目标章节的阅读记录超过第一页时，先让用户选择“继续阅读”或“从头开始”；记录就在第一页时直接进入，不询问，也不在正文就绪前覆盖旧进度。</p>
+    <p>2026-11-16 · Kica Desktop / Android · 已按确认方案实施，验证记录见第 09 节</p>
+  </header>
+
+  <section>
+    <h2>01 / 目标与范围</h2>
+    <ul>
+      <li>每次从阅读器外部进入某章节时，先读取该章节的本地进度；仅当 pageIndex &gt; 0 时询问。无记录或记录就在第一页（pageIndex = 0），均直接从第一页进入；已有记录时保留其阅读模式。</li>
+      <li>两种选择明确且对等可达：继续原位置，或回到目标章节开头；支持取消本次进入。</li>
+      <li>桌面与 Android、在线与已下载内容采用一致规则。</li>
+    </ul>
+    <div class="callout"><strong>本版范围决策：</strong>“此前进度”指同一漫画、同一目标章节的记录；“从头开始”指该章节第一页，不是全书第一章。其他章节有记录，不改变用户此次选中的章节。</div>
+    <p class="meta">不增加“以后不再询问”、全局自动恢复开关、全书进度清空、跨设备同步、像素级滚动位置恢复或已读状态重设计。</p>
+  </section>
+
+  <section>
+    <h2>02 / 现状与差异</h2>
+    <p>当前阅读路由携带 comicId、episodeId；ReaderScreen 按这两个标识调用 LibraryRepository.readingProgress，读取完成后直接使用历史 pageIndex，并恢复 mode，没有用户选择步骤。</p>
+    <p>ReadingProgress 包含章节、从 0 开始的页索引、阅读模式与更新时间；不包含图片内滚动偏移。阅读布局通过 savePage 保存进度，并更新阅读历史。</p>
+    <p>阅读器内跨章已有显式落点：下一章开头、上一章末尾。本次仅改变外部进入时的恢复决策，不打断连续跨章，也不改变这些落点。</p>
+  </section>
+
+  <section>
+    <h2>03 / 触发规则</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>场景</th><th>行为</th></tr></thead>
+      <tbody>
+        <tr><td>外部进入，目标章节无进度</td><td>不询问，直接从第 1 页进入。</td></tr>
+        <tr><td>外部进入，目标章节记录在第 1 页</td><td>不询问，直接从第 1 页进入，保留记录中的阅读模式；单页章节的末页也是第 1 页，同样不询问。</td></tr>
+        <tr><td>外部进入，目标章节记录超过第 1 页</td><td>展示选择框；末页记录也询问，不推断“已读完”。按原始页索引判断，双页模式不能因第 2 页与第 1 页同组而跳过询问。</td></tr>
+        <tr><td>只有其他章节有进度</td><td>不询问、不跳章；从当前目标章节第 1 页进入。</td></tr>
+        <tr><td>阅读器内上一章／下一章、边界跨章</td><td>不询问，遵循既有跨章落点，不恢复目标章历史中间页。</td></tr>
+        <tr><td>重组、窗口调整、切换阅读模式、加载重试</td><td>不重复询问，不清除当前会话的已选结果。</td></tr>
+        <tr><td>切到后台再回到同一阅读会话</td><td>不重新询问。页面真正退出后再次进入，则重新检查，仍按“超过第一页才询问”的规则处理。</td></tr>
+        <tr><td>进程重启后重新打开阅读路由</td><td>作为新进入处理；仅记录超过第一页时再次询问，不沿用上个进程中的临时选择。</td></tr>
+      </tbody>
+    </table></div>
+    <p>所有已有及后续外部阅读入口统一经过同一入口门控，不在各入口各自弹框。若未来添加“继续阅读”入口，按钮名称本身也不视为本次二选一确认。</p>
+  </section>
+
+  <section>
+    <h2>04 / 对话框与操作</h2>
+    <div class="mock" role="group" aria-label="进度选择静态示意">
+      <h3>继续上次阅读？</h3>
+      <p>你上次读到「第 12 话」第 8 页。<br>继续上次的位置，还是从本章开头开始？</p>
+      <div class="actions">
+        <span class="action">取消</span>
+        <span class="action">从头开始</span>
+        <span class="action primary">继续阅读</span>
+      </div>
+    </div>
+    <p class="meta">以上为静态示意，不是可操作原型。章节名与页码动态填充；显示页码 = pageIndex + 1。尚无可靠总页数时只显示“第 N 页”，不显示猜测的百分比或总页数。</p>
+    <ul>
+      <li><strong>继续阅读：</strong>采用读取到的目标章节页索引与历史阅读模式；纵向从该图片起始位置显示，双页定位到包含该原始页的分组。</li>
+      <li><strong>从头开始：</strong>目标章节原始页索引设为 0。仍沿用该章节记录的阅读模式，不将位置重置扩展为重置模式或其他阅读偏好。</li>
+      <li><strong>取消：</strong>放弃此次进入，回到发起阅读的原页面，保留其筛选、滚动位置和导航上下文；没有上级页面时回到应用默认主页面，不退出应用。</li>
+      <li>“继续阅读”为主要操作；“从头开始”不能用低对比度隐藏。桌面初始焦点放在“继续阅读”；Tab / Shift+Tab 遍历，Enter / Space 仅激活当前聚焦按钮。</li>
+      <li>Android 系统返回键／返回手势、桌面 Esc、点击遮罩均等同“取消”；使用 PlatformBackHandler 统一返回回调，一次操作不能同时关闭框并额外弹出一层页面。</li>
+      <li>选择框展示时焦点限制在框内，底层不响应翻页、滚动、模式切换或快捷键；选择完成并进入阅读后，再将桌面焦点交给正文。</li>
+      <li>小窗口、长章节名或大字体下允许内容滚动，操作按钮保持可达。桌面溢出区域必须配同状态、可见且可拖动的滚动条，仅可滚动时显示；移动端可触摸滚动。</li>
+    </ul>
+    <p>按钮、标题、正文、错误及提示全部纳入现有字符串资源体系。辅助技术可读出章节与页码，长标题可换行，不仅依靠颜色区分操作。</p>
+  </section>
+
+  <section>
+    <h2>05 / 进入流程与状态</h2>
+    <ol>
+      <li><strong>CheckingProgress：</strong>创建一次进入会话，冻结目标漫画／章节标识，读取本地进度；显示轻量加载态并允许返回。不挂载会产生进度回调的正文布局。</li>
+      <li><strong>AwaitingChoice：</strong>仅当存在记录且 pageIndex &gt; 0 时，固定本次进度快照并展示选择框；无记录或 pageIndex ≤ 0 时直接将进入决策设为 Start（页 0），已有记录则保留其模式。负索引视为异常的第一页记录，不询问，并按异常规则提示修正。框下不短暂展示历史页或第一页。</li>
+      <li><strong>Resolved：</strong>原子接收一个 Continue 或 Start 决策；立即防止重复提交，准备目标章节页列表。允许预取数据，但不得在选择前产生阅读行为或历史写入。</li>
+      <li><strong>LoadingContent：</strong>等待非空页列表，校验落点；失败时保留选择，允许重试或返回，不再次询问。</li>
+      <li><strong>Reading：</strong>将模式和初始页一次性交给阅读布局；定位完成、正文实际可见后，启用正常进度／历史保存。</li>
+      <li><strong>Cancelled：</strong>结束进入会话，忽略所有迟到结果，返回原页面。不得保存本次候选位置。</li>
+    </ol>
+    <p>选择状态按一次外部进入会话持有，不能只按 currentEpisodeId 触发弹框。跨章使用独立的显式导航原因及落点，不重新进入 AwaitingChoice。</p>
+    <p>即使页面框架已经进入阅读路由，决策完成前也只能显示门控层，不允许正文布局先启动、保存第 1 页后再读取或恢复旧进度。</p>
+  </section>
+
+  <section>
+    <h2>06 / 保存语义与异常</h2>
+    <ul>
+      <li><strong>选择不是立即重置：</strong>点击“从头开始”本身不删记录、不清空历史；第 1 页成功定位并可见后，才按现有流程写入该章节新进度和历史。从头开始后正常阅读，最新位置成为下次询问时的进度。</li>
+      <li><strong>失败不损坏旧数据：</strong>选择后加载失败、空章节、加载中退出，均保留旧记录。继续阅读定位成功后，按正常阅读规则更新访问时间和历史。</li>
+      <li><strong>进度读取失败：</strong>不能当作“无记录”。显示“无法读取阅读进度”，提供“重试”“取消”，不自动从第一页进入并覆盖可能存在的记录。</li>
+      <li><strong>页索引越界：</strong>在非空页列表就绪后，将索引裁剪到 [0, 页数 − 1]；发生修正时提示“章节页数已变化，已定位到可用页面”。负索引也按此处理；空章节不执行裁剪或保存。</li>
+      <li><strong>目标章节失效：</strong>显示不可用／加载失败状态，提供重试和返回；不静默跳到其他章节。</li>
+      <li><strong>离线：</strong>进度仍从本地读取；内容沿用现有下载回退机制。内容不可用时遵循失败不写入规则，不新增离线进度副本。</li>
+      <li><strong>异步竞态：</strong>读取、加载、定位与保存回调都绑定进入会话及章节；返回、切换目标或卸载后，旧任务不能弹出框、抢焦点或覆盖新会话进度。相同章节写入按顺序提交，避免旧写入晚于新落点覆盖。</li>
+    </ul>
+    <p class="meta">恢复精度保持现有原始页粒度；双页归组和模式切换遵循现有逻辑。无需新增数据库字段，也不修改 FileProvider 或文件共享权限。</p>
+  </section>
+
+  <section>
+    <h2>07 / 实现落点（Review 通过后）</h2>
+    <ol>
+      <li>在 ReaderScreen 前置统一进入门控，或拆分为入口容器与正文；抽出小型可测试状态机，区分外部进入和会话内跨章。</li>
+      <li>复用 LibraryRepository.readingProgress 与 ReadingProgress；去除外部进入路径中“读取完成即自动恢复”的隐式行为，让初始模式与页索引由已确认决策统一提供。</li>
+      <li>为正文挂载、初始定位和 savePage 建立就绪门槛，防止初始 0 页回调抢先写入；不改变正常滚动、分页及阅读历史的业务含义。</li>
+      <li>新增可复用的进度选择框和读取错误态，落实 Android 返回、桌面 Esc、焦点隔离、滚动条与本地化。</li>
+      <li>添加状态机及仓库交互测试，补充桌面真实窗口和 Android 返回流程回归。新增文件按职责拆分，每个默认不超过 500 行。</li>
+    </ol>
+    <p class="meta">主要涉及 ReaderScreens.kt、必要的入口状态／对话框新文件、现有 ReaderLayouts.kt 的初始定位与保存协作、字符串资源及对应测试。路由无需因本需求必然新增字段。</p>
+  </section>
+
+  <section>
+    <h2>08 / 验收标准</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>场景</th><th>通过条件</th></tr></thead>
+      <tbody>
+        <tr><td>没有记录</td><td>直接进入目标章第 1 页，不闪现选择框；不受其他章节记录影响。</td></tr>
+        <tr><td>记录在第一页</td><td>pageIndex = 0 时直接进入第 1 页，保留历史模式且不闪现选择框；单页章节同样不询问；正文就绪前不写入。</td></tr>
+        <tr><td>记录超过第一页</td><td>pageIndex &gt; 0 的中间页、末页记录均询问；双页模式第 2 页记录仍询问；选择前无正文交互、进度保存和历史更新。</td></tr>
+        <tr><td>继续阅读</td><td>恢复正确章节、原始页及模式；纵向／单页双方向／双页双方向均验证；双页命中包含目标页的分组。</td></tr>
+        <tr><td>从头开始</td><td>同章页 0、保留模式；不跳全书第一章，不清空其他章节；成功可见后才更新记录。</td></tr>
+        <tr><td>取消与返回</td><td>取消按钮、遮罩、Esc、Android 返回键／手势结果一致；回到原上下文且只返回一次，旧记录与历史不变。</td></tr>
+        <tr><td>会话边界</td><td>退出重进重新检查，仅超过第一页时询问；重组、窗口调整、切模式、后台恢复、重试不重复询问。</td></tr>
+        <tr><td>跨章</td><td>工具栏、键盘、滚动边界跨章均不弹框；下一章开头、上一章末尾，不受该章旧进度干扰。</td></tr>
+        <tr><td>读取／加载异常</td><td>进度读取失败可重试或取消；内容失败、空页、离线不可用、加载中退出均不覆盖旧记录。</td></tr>
+        <tr><td>数据变化</td><td>页数缩减、负索引均合法裁剪并提示；奇数双页末页无越界；章节失效不误跳章。</td></tr>
+        <tr><td>重复操作与竞态</td><td>连点只提交一次；选择前保存调用为 0；取消后迟到结果不生效；旧回调不覆盖新会话进度。</td></tr>
+        <tr><td>焦点与适配</td><td>键盘可完成三种操作且不穿透；大字体、小窗口、长标题可用；桌面实际溢出时滚动条可拖动。</td></tr>
+      </tbody>
+    </table></div>
+    <p>自动化覆盖进入状态转换、记录有无、第一页免询问（含单页章节及模式保留）、双页第 2 页仍询问、取消零写入、加载失败零写入、落点裁剪、跨章绕过询问及异步过期结果。实际交互验证覆盖桌面焦点／Esc 与 Android 系统返回／手势；未实机验证的部分须列为验证缺口。</p>
+  </section>
+  <section>
+    <h2>09 / 实施与验证记录</h2>
+    <ul>
+      <li>统一入口门控、选择框、错误重试与会话内恢复已实现。页 0 不询问，跨章不读取历史落点；加载中的目标章与模式选择保留在会话内存，不提前写入仓库。</li>
+      <li>进度和历史由会话内单一 FIFO 消费者依序保存；旧布局、过期读取与卸载后的回调不再提交候选位置。</li>
+      <li>新增 12 项状态机／落点单元测试、3 项保存队列测试与 6 项真实桌面窗口测试。新增窗口用例已通过，覆盖五种模式下继续／从头、页 0 免框、三种取消方式、空页／失败不写入、锁屏重挂及加载中跨章重挂、小窗口长标题。</li>
+      <li>共享桌面代码与 Android 代码编译通过；完整桌面测试任务通过（80 项中 75 项通过、5 项无关窗口测试因未启用各自 opt-in 而跳过），阅读器新增窗口测试及既有五种模式键盘回归均实际执行通过。旧键盘用例的工具栏像素采样改为相对窗口内容区，避免窗口装饰高度不同造成误判。</li>
+      <li>桌面窗口测试在隔离 X11 显示中运行，使用软件渲染，并通过测试 JVM 的 <code>-Dskiko.vsync.enabled=false</code> 避免虚拟显示的帧限速停滞。此参数仅用于测试，不修改产品默认渲染配置。</li>
+      <li><strong>验证缺口：</strong>没有连接 Android 设备，未实机验证界面返回、系统返回键与返回手势。大字体与桌面滚动条拖动仍需专项人工验收；小窗口滚动条已确认可见、键盘操作可达。</li>
+    </ul>
+  </section>
+  <footer>已采用：以目标章节为范围；第 1 页记录不询问，超过第 1 页才询问；从头开始保留模式；每次外部重进重新检查；取消回原页面且不写入。</footer>
+</main>
+</body>
+</html>
