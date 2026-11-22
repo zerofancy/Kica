@@ -3,6 +3,7 @@ package top.ntutn.kica.network
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -29,7 +30,7 @@ class HttpDownloadExecutor(
             error = null,
         )
         onProgress(current)
-        val root = Path.of(task.targetLocation)
+        val root = Paths.get(task.targetLocation)
             .resolve(safeName(task.comic.title))
             .resolve(safeName(task.episode.title))
         withContext(Dispatchers.IO) { Files.createDirectories(root) }
@@ -63,7 +64,7 @@ class HttpDownloadExecutor(
                         if (!response.isSuccessful) {
                             throw PicaApiException("Image request failed with HTTP ${response.code}.")
                         }
-                        val body = response.body ?: throw PicaApiException("Image response was empty.")
+                        val body = response.body
                         val temporary = destination.resolveSibling("${destination.fileName}.part")
                         body.byteStream().use { input ->
                             Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING)
