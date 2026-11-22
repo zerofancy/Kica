@@ -21,30 +21,66 @@ class RandomComicsStateTest {
         val networkResponse = CompletableDeferred<List<ComicSummary>>()
         var fetchCount = 0
         var writtenCache: List<ComicSummary>? = null
-        val loader = RandomComicsLoader(
-            fetchRandomComics = {
+        val loader = top.ntutn.kica.ui.store.RandomComicsStore(
+            fetch = {
                 fetchCount++
                 networkResponse.await()
             },
             readCache = { listOf(cached) },
             writeCache = { writtenCache = it },
             scope = this,
-            fallbackError = "failed",
         )
 
-        loader.loadOnce()
-        loader.loadOnce()
+        loader.ensureLoaded()
+        loader.ensureLoaded()
         runCurrent()
 
         assertEquals(1, fetchCount)
-        assertEquals(listOf(cached), loader.state.items)
-        assertTrue(loader.state.isLoading)
+        assertEquals(listOf(cached), loader.state.value.items)
+        assertTrue(loader.state.value.isLoading)
 
         networkResponse.complete(listOf(fresh))
         testScheduler.advanceUntilIdle()
 
-        assertEquals(listOf(fresh), loader.state.items)
+        assertEquals(listOf(fresh), loader.state.value.items)
         assertEquals(listOf(fresh), writtenCache)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun returningAfterFailureDoesNotSilentlyRetry() = runTest {
+        var calls = 0
+        val store = top.ntutn.kica.ui.store.RandomComicsStore(
+            fetch = { calls++; error("offline") }, readCache = { null }, writeCache = {}, scope = this,
+        )
+        store.ensureLoaded()
+        runCurrent()
+        store.ensureLoaded()
+        runCurrent()
+        assertEquals(1, calls)
+        assertEquals("offline", store.state.value.errorMessage)
+        store.refresh()
+        runCurrent()
+        assertEquals(2, calls)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun destroyedStoreCancelsRequestWithoutCachingOrUserError() = runTest {
+        val response = CompletableDeferred<List<ComicSummary>>()
+        var written = false
+        var cancelled = false
+        val store = top.ntutn.kica.ui.store.RandomComicsStore(
+            fetch = { try { response.await() } finally { cancelled = !response.isCompleted } },
+            readCache = { null }, writeCache = { written = true }, scope = backgroundScope,
+        )
+        store.ensureLoaded()
+        runCurrent()
+        store.onDestroy()
+        runCurrent()
+        assertTrue(cancelled)
+        assertFalse(written)
+        assertNull(store.state.value.errorMessage)
     }
 
     @Test

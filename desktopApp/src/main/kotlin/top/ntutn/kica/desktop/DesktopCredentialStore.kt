@@ -27,6 +27,7 @@ internal class DesktopCredentialStore : CredentialStore {
 
     override suspend fun writeToken(token: String) {
         sessionFallback = token
+        preferences.put("navigation-session-id", java.util.UUID.randomUUID().toString())
         withContext(Dispatchers.IO) {
             runBackend {
                 when {
@@ -40,6 +41,7 @@ internal class DesktopCredentialStore : CredentialStore {
 
     override suspend fun clearToken() {
         sessionFallback = null
+        preferences.remove("navigation-session-id")
         withContext(Dispatchers.IO) {
             runBackend {
                 when {
@@ -61,6 +63,11 @@ internal class DesktopCredentialStore : CredentialStore {
             }
         }
     }
+
+    override suspend fun readSessionId(): String =
+        preferences.get("navigation-session-id", null) ?: java.util.UUID.randomUUID().toString().also {
+            preferences.put("navigation-session-id", it)
+        }
 
     private fun readWindows(): String? {
         val encoded = preferences.get(WINDOWS_TOKEN, null) ?: return null

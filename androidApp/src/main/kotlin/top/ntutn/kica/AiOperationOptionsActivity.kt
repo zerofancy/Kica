@@ -11,6 +11,8 @@ import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.ui.screen.AiOperationOptionsScreen
 import top.ntutn.kica.ui.theme.KicaFluentTheme
 import androidx.core.content.edit
+import com.arkivanov.decompose.defaultComponentContext
+import top.ntutn.kica.ui.navigation.AiOperationOptionsComponent
 
 /**
  * Standalone activity for AI (GUI Agent) operation options.
@@ -28,12 +30,13 @@ class AiOperationOptionsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as KicaApplication).container
+        val component = AiOperationOptionsComponent(defaultComponentContext(), container.library)
 
         setContent {
             val settings by container.library.settings().collectAsState(initial = AppSettings())
             KicaFluentTheme(preference = settings.theme) {
                 AiOperationOptionsScreen(
-                    library = container.library,
+                    component = component,
                     onToggle = { enabled -> pushDynamicPolicy(enabled) },
                 )
             }

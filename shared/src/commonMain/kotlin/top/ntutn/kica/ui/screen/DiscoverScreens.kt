@@ -26,14 +26,10 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,15 +50,11 @@ import io.github.composefluent.icons.regular.ArrowSync
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.icons.regular.Settings
 import io.github.composefluent.icons.regular.Tag
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicCategory
-import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.model.RankPeriod
 import top.ntutn.kica.resources.Res
@@ -74,7 +66,6 @@ import top.ntutn.kica.resources.category_filter_done
 import top.ntutn.kica.resources.category_filter_select_all
 import top.ntutn.kica.resources.discover
 import top.ntutn.kica.resources.empty
-import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.random_books
 import top.ntutn.kica.resources.rank_24h
 import top.ntutn.kica.resources.rank_30d
@@ -100,41 +91,58 @@ import androidx.compose.runtime.collectAsState
 
 @Composable
 internal fun DiscoverScreen(
-    repository: PicaRepository,
+    store: top.ntutn.kica.ui.store.DiscoverStore,
     library: LibraryRepository,
     onNavigate: (AppRoute) -> Unit,
 ) {
-    var selected by remember { mutableStateOf(RankPeriod.HOURS_24) }
-    var refresh by remember { mutableIntStateOf(0) }
+    val selected by store.selected.collectAsState()
+    val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    stateHolder.SaveableStateProvider(selected.name) {
+        DiscoverContent(store, library, onNavigate)
+    }
+}
+
+@Composable
+private fun DiscoverContent(
+    store: top.ntutn.kica.ui.store.DiscoverStore,
+    library: LibraryRepository,
+    onNavigate: (AppRoute) -> Unit,
+) {
+    val selected by store.selected.collectAsState()
     var showCategoryFilter by remember { mutableStateOf(false) }
-    val loadFailed = stringResource(Res.string.load_failed)
     val settings by library.settings().collectAsState(initial = AppSettings())
     val blocked = settings.blockedCategories
-    val categoriesState by produceState<LoadState<List<ComicCategory>>>(LoadState.Loading, refresh) {
-        val cached = runCatching { library.cachedCategories() }.getOrNull()
-        if (cached != null) {
-            value = LoadState.Data(cached, fromCache = true)
-        }
-        runCatching { repository.categories() }
-            .onSuccess { categories ->
-                value = LoadState.Data(categories)
-                runCatching { library.cacheCategories(categories) }
-            }
-            .onFailure { error ->
-                if (cached == null) {
-                    value = LoadState.Error(error.message ?: loadFailed)
-                }
-            }
-    }
-    val rankingState by produceState<LoadState<List<ComicSummary>>>(LoadState.Loading, selected, refresh) {
-        value = runCatching { repository.ranking(selected) }
-            .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
-    }
+    val categoriesState by store.categories.collectAsState()
+    val rankingState by store.ranking.collectAsState()
     val gridState = rememberLazyGridState()
     val rankingFilter = rememberComicFilter(
         (rankingState as? LoadState.Data)?.value.orEmpty(), library,
     )
 
+    val anchorKeys = buildList {
+        addAll(listOf("discover-title", "categories-title", "random-comics-entry"))
+        when (val value = categoriesState) {
+            is LoadState.Data -> {
+                val visible = value.value.filterBlockedCategories(blocked)
+                if (visible.isEmpty()) add("category-empty")
+                else addAll(visible.map { "category:${it.id.ifBlank { it.title }}" })
+            }
+            is LoadState.Error -> add("category-error")
+            else -> add("category-loading")
+        }
+        addAll(listOf("ranking-spacer", "ranking-title", "ranking-controls"))
+        when (rankingState) {
+            is LoadState.Data -> {
+                add("ranking-filter")
+                if (rankingFilter.visible.isEmpty()) add("ranking-empty")
+                else addAll(rankingFilter.visible.map { "ranking:${it.id}" })
+            }
+            is LoadState.Error -> add("ranking-error")
+            else -> add("ranking-loading")
+        }
+    }
+    top.ntutn.kica.ui.component.PreserveGridAnchor(gridState, anchorKeys,
+        ready = categoriesState !is LoadState.Loading && rankingState !is LoadState.Loading && rankingFilter.pending == 0)
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
@@ -144,14 +152,14 @@ internal fun DiscoverScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "discover-title", span = { GridItemSpan(maxLineSpan) }) {
                 SectionTitle(stringResource(Res.string.discover)) {
                     FluentIconButton(onClick = { onNavigate(AppRoute.Search()) }) {
                         Icon(Icons.Regular.Search, contentDescription = stringResource(Res.string.search))
                     }
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "categories-title", span = { GridItemSpan(maxLineSpan) }) {
                 SectionTitle(stringResource(Res.string.categories)) {
                     FluentIconButton(onClick = { showCategoryFilter = true }) {
                         Icon(
@@ -168,7 +176,7 @@ internal fun DiscoverScreen(
                 is LoadState.Data -> {
                     val visible = categoryValue.value.filterBlockedCategories(blocked)
                     if (visible.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(key = "category-empty", span = { GridItemSpan(maxLineSpan) }) {
                             Text(
                                 stringResource(Res.string.empty),
                                 color = FluentTheme.colors.text.text.secondary,
@@ -186,20 +194,20 @@ internal fun DiscoverScreen(
                         }
                     }
                 }
-                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    ErrorCard(categoryValue.message) { refresh++ }
+                is LoadState.Error -> item(key = "category-error", span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(categoryValue.message) { store.refresh() }
                 }
-                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                else -> item(key = "category-loading", span = { GridItemSpan(maxLineSpan) }) {
                     FluentProgressBar(Modifier.fillMaxWidth())
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "ranking-spacer", span = { GridItemSpan(maxLineSpan) }) {
                 Spacer(Modifier.height(8.dp))
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "ranking-title", span = { GridItemSpan(maxLineSpan) }) {
                 Text(stringResource(Res.string.ranking), style = FluentTheme.typography.subtitle)
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "ranking-controls", span = { GridItemSpan(maxLineSpan) }) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,7 +222,7 @@ internal fun DiscoverScreen(
                         }
                         FluentChip(
                             selected = selected == period,
-                            onClick = { selected = period },
+                            onClick = { store.select(period) },
                             label = { Text(stringResource(label)) },
                         )
                     }
@@ -223,11 +231,11 @@ internal fun DiscoverScreen(
             when (val rankingValue = rankingState) {
                 is LoadState.Data -> {
                     val visible = rankingFilter.visible
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "ranking-filter", span = { GridItemSpan(maxLineSpan) }) {
                         ComicFilterNotice(rankingFilter, library)
                     }
                     if (visible.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(key = "ranking-empty", span = { GridItemSpan(maxLineSpan) }) {
                             Text(
                                 stringResource(Res.string.empty),
                                 color = FluentTheme.colors.text.text.secondary,
@@ -239,10 +247,10 @@ internal fun DiscoverScreen(
                         }
                     }
                 }
-                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    ErrorCard(rankingValue.message) { refresh++ }
+                is LoadState.Error -> item(key = "ranking-error", span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(rankingValue.message) { store.refresh() }
                 }
-                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                else -> item(key = "ranking-loading", span = { GridItemSpan(maxLineSpan) }) {
                     FluentProgressBar(Modifier.fillMaxWidth())
                 }
             }
@@ -254,6 +262,7 @@ internal fun DiscoverScreen(
         CategoryFilterDialog(
             allCategories = (categoriesState as? LoadState.Data)?.value.orEmpty(),
             library = library,
+            updateBlocked = store::updateBlocked,
             onDismiss = { showCategoryFilter = false },
         )
     }
@@ -263,6 +272,7 @@ internal fun DiscoverScreen(
 private fun CategoryFilterDialog(
     allCategories: List<ComicCategory>,
     library: LibraryRepository,
+    updateBlocked: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val settingsSnapshot by library.settings().collectAsState(initial = AppSettings())
@@ -304,12 +314,6 @@ private fun CategoryFilterDialog(
                     style = FluentTheme.typography.caption,
                     color = FluentTheme.colors.text.text.secondary,
                 )
-                val updateBlocked: (Set<String>) -> Unit = { next ->
-                    scope.launch {
-                        val latest = library.settings().first()
-                        library.updateSettings(latest.copy(blockedCategories = next))
-                    }
-                }
                 val scrollState = rememberScrollState()
                 Box(Modifier.fillMaxWidth().height(360.dp)) {
                     if (allCategories.isEmpty()) {

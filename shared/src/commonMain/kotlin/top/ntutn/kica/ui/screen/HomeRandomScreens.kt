@@ -25,8 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,8 +45,6 @@ import io.github.composefluent.icons.regular.ArrowLeft
 import io.github.composefluent.icons.regular.ArrowSync
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
-import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.resources.Res
@@ -62,7 +58,8 @@ import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.shuffle_batch
 import top.ntutn.kica.ui.ComicFilterNotice
 import top.ntutn.kica.ui.rememberComicFilter
-import top.ntutn.kica.ui.RandomComicsLoader
+import top.ntutn.kica.ui.store.RandomComicsStore
+import top.ntutn.kica.ui.store.HomeStore
 import top.ntutn.kica.ui.component.ComicCard
 import top.ntutn.kica.ui.component.ComicGrid
 import top.ntutn.kica.ui.component.ErrorCard
@@ -73,45 +70,37 @@ import top.ntutn.kica.ui.component.FluentProgressBar
 import top.ntutn.kica.ui.component.FluentProgressRing
 import top.ntutn.kica.ui.component.SectionTitle
 import top.ntutn.kica.ui.component.LoadStateContent
-import top.ntutn.kica.ui.state.RandomComicsUiState
 import top.ntutn.kica.ui.PlatformVerticalScrollbar
 import top.ntutn.kica.ui.PlatformHorizontalScrollbar
 
 @Composable
 internal fun HomeScreen(
-    repository: PicaRepository,
+    store: HomeStore,
     library: LibraryRepository,
-    randomLoader: RandomComicsLoader,
+    randomLoader: RandomComicsStore,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    var recommendationsRefresh by remember { mutableIntStateOf(0) }
-    val loadFailed = stringResource(Res.string.load_failed)
-    val recommendationsState by produceState<LoadState<List<ComicSummary>>>(
-        initialValue = LoadState.Loading,
-        key1 = recommendationsRefresh,
-    ) {
-        val cached = runCatching { library.cachedRecommendations() }.getOrNull()
-        if (cached != null) {
-            value = LoadState.Data(cached, fromCache = true)
-        }
-        runCatching { repository.recommendations() }
-            .onSuccess { recommendations ->
-                value = LoadState.Data(recommendations)
-                runCatching { library.cacheRecommendations(recommendations) }
-            }
-            .onFailure { error ->
-                if (cached == null) {
-                    value = LoadState.Error(error.message ?: loadFailed)
-                }
-            }
-    }
-    val randomState = randomLoader.state
+    val recommendationsState by store.state.collectAsState()
+    val randomState by randomLoader.state.collectAsState()
     val gridState = rememberLazyGridState()
     val recommendationsFilter = rememberComicFilter(
         (recommendationsState as? LoadState.Data)?.value.orEmpty(), library,
     )
     val randomFilter = rememberComicFilter(randomState.items.orEmpty(), library)
 
+    val anchorKeys = buildList {
+        addAll(listOf("recommendations-title", "recommendations-body", "section-spacer", "random-title"))
+        if (randomState.items == null) add("random-state") else {
+            if (randomState.isLoading) add("random-progress")
+            if (randomState.errorMessage != null) add("random-error")
+            add("random-filter")
+            if (randomFilter.visible.isEmpty()) add("random-empty")
+            else addAll(randomFilter.visible.map { "random:${it.id}" })
+        }
+    }
+    top.ntutn.kica.ui.component.PreserveGridAnchor(gridState, anchorKeys,
+        ready = recommendationsState !is LoadState.Loading && !randomState.isLoading &&
+            recommendationsFilter.pending == 0 && randomFilter.pending == 0)
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
@@ -121,11 +110,11 @@ internal fun HomeScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "recommendations-title", span = { GridItemSpan(maxLineSpan) }) {
                 SectionTitle(stringResource(Res.string.recommended))
             }
             when (val value = recommendationsState) {
-                is LoadState.Data -> item(span = { GridItemSpan(maxLineSpan) }) {
+                is LoadState.Data -> item(key = "recommendations-body", span = { GridItemSpan(maxLineSpan) }) {
                     Column {
                         ComicFilterNotice(recommendationsFilter, library)
                         HorizontalComicRow(
@@ -134,45 +123,45 @@ internal fun HomeScreen(
                         )
                     }
                 }
-                is LoadState.Error -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    ErrorCard(value.message) { recommendationsRefresh++ }
+                is LoadState.Error -> item(key = "recommendations-body", span = { GridItemSpan(maxLineSpan) }) {
+                    ErrorCard(value.message) { store.refresh() }
                 }
-                else -> item(span = { GridItemSpan(maxLineSpan) }) {
+                else -> item(key = "recommendations-body", span = { GridItemSpan(maxLineSpan) }) {
                     FluentProgressBar(Modifier.fillMaxWidth())
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "section-spacer", span = { GridItemSpan(maxLineSpan) }) {
                 Spacer(Modifier.height(6.dp))
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "random-title", span = { GridItemSpan(maxLineSpan) }) {
                 SectionTitle(stringResource(Res.string.random_comics)) {
                     RandomRefreshButton(randomLoader)
                 }
             }
             if (randomState.items == null) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = "random-state", span = { GridItemSpan(maxLineSpan) }) {
                     when {
                         randomState.isLoading -> FluentProgressBar(Modifier.fillMaxWidth())
-                        randomState.errorMessage != null -> ErrorCard(randomState.errorMessage, randomLoader::refresh)
+                        randomState.errorMessage != null -> randomState.errorMessage?.let { ErrorCard(it, randomLoader::refresh) }
                     }
                 }
             } else {
                 if (randomState.isLoading) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "random-progress", span = { GridItemSpan(maxLineSpan) }) {
                         FluentProgressBar(Modifier.fillMaxWidth())
                     }
                 }
                 randomState.errorMessage?.let { message ->
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "random-error", span = { GridItemSpan(maxLineSpan) }) {
                         RandomRefreshError(message, randomLoader::refresh)
                     }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = "random-filter", span = { GridItemSpan(maxLineSpan) }) {
                     ComicFilterNotice(randomFilter, library)
                 }
                 val visibleRandom = randomFilter.visible
                 if (visibleRandom.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "random-empty", span = { GridItemSpan(maxLineSpan) }) {
                         Text(
                             stringResource(Res.string.empty),
                             color = FluentTheme.colors.text.text.secondary,
@@ -194,12 +183,13 @@ internal fun HomeScreen(
 
 @Composable
 internal fun RandomComicsScreen(
-    loader: RandomComicsLoader,
+    loader: RandomComicsStore,
     library: LibraryRepository,
     onBack: () -> Unit,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    val state = loader.state
+    val state by loader.state.collectAsState()
+    val filter = rememberComicFilter(state.items.orEmpty(), library)
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(focusRequester) { focusRequester.requestFocus() }
@@ -239,6 +229,7 @@ internal fun RandomComicsScreen(
                 onRetry = loader::refresh,
             ) {}
             else -> Column(Modifier.weight(1f).fillMaxWidth()) {
+                ComicFilterNotice(filter, library)
                 if (state.isLoading) {
                     FluentProgressBar(Modifier.fillMaxWidth())
                 }
@@ -246,7 +237,7 @@ internal fun RandomComicsScreen(
                     RandomRefreshError(message, loader::refresh)
                 }
                 ComicGrid(
-                    comics = items,
+                    comics = filter.visible,
                     onComicClick = onComicClick,
                     modifier = Modifier.weight(1f),
                 )
@@ -256,12 +247,13 @@ internal fun RandomComicsScreen(
 }
 
 @Composable
-internal fun RandomRefreshButton(loader: RandomComicsLoader) {
+internal fun RandomRefreshButton(loader: RandomComicsStore) {
+    val state by loader.state.collectAsState()
     FluentButton(
         onClick = loader::refresh,
-        enabled = !loader.state.isLoading,
+        enabled = !state.isLoading,
     ) {
-        if (loader.state.isLoading) {
+        if (state.isLoading) {
             FluentProgressRing(Modifier.size(16.dp), size = 16.dp)
         } else {
             Icon(

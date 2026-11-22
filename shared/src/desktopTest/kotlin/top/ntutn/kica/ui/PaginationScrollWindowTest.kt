@@ -56,7 +56,7 @@ class PaginationScrollWindowTest {
                 setSize(720, 600)
                 setContent {
                     val currentScope = rememberCoroutineScope()
-                    val state = rememberLazyGridState()
+                    val state = rememberLazyGridState(initialFirstVisibleItemIndex = 16)
                     val resolver = remember { ComicTagResolver({ newTags.await() }, library, currentScope) }
                     SideEffect { grid.set(state); scope.set(currentScope) }
                     KicaFluentTheme {
@@ -88,6 +88,8 @@ class PaginationScrollWindowTest {
         }
         try {
             pumpUntil { grid.get()?.layoutInfo?.totalItemsCount == 61 }
+            // A fresh anchor helper must respect an externally supplied nonzero LazyGridState.
+            pumpUntil { grid.get().firstVisibleItemIndex > 0 }
             SwingUtilities.invokeAndWait { scope.get().launch { grid.get().scrollToItem(49, 180) } }
             pumpUntil { loading.value && grid.get().firstVisibleItemIndex == 49 }
             val before = anchor()

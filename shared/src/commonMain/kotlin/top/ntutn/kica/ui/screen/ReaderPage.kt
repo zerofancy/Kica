@@ -6,6 +6,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -83,6 +85,8 @@ internal expect fun Modifier.imageContextMenuGesture(onTriggered: (androidx.comp
 
 @Composable
 internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int, fit: PageFit) {
+    // Preloading follows the actual visible/focused UI, not the retained business store.
+    if (!LocalWindowInfo.current.isWindowFocused || pages.isEmpty()) return
     val platformContext = LocalPlatformContext.current
     val imageLoader = remember(platformContext) { SingletonImageLoader.get(platformContext) }
     val currentSnapshot = remember { mutableIntStateOf(currentIndexProvider()) }
@@ -97,13 +101,13 @@ internal fun PagePreloader(pages: List<PageRef>, currentIndexProvider: () -> Int
         val hi = (cur + PRELOAD_AHEAD).coerceAtMost(pages.lastIndex)
         pages.subList(lo, hi + 1)
     }
-    LaunchedEffect(preloadTargets, fit, imageLoader, platformContext) {
-        for (page in preloadTargets) {
-            val target = page.localPath ?: page.imageUrl
-            val req = ImageRequest.Builder(platformContext)
-                .data(target)
+    DisposableEffect(preloadTargets, fit, imageLoader, platformContext) {
+        val requests = preloadTargets.map { page ->
+            val request = ImageRequest.Builder(platformContext)
+                .data(page.localPath ?: page.imageUrl)
                 .build()
-            imageLoader.enqueue(req)
+            imageLoader.enqueue(request)
         }
+        onDispose { requests.forEach { it.dispose() } }
     }
 }

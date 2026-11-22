@@ -72,6 +72,8 @@ interface CredentialStore {
     suspend fun readToken(): String?
     suspend fun writeToken(token: String)
     suspend fun clearToken()
+    /** Non-secret marker rotated on each explicit login, never derived from the bearer token. */
+    suspend fun readSessionId(): String? = null
 }
 
 interface FileLocationProvider {

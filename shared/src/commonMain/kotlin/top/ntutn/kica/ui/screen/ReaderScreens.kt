@@ -16,12 +16,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,23 +42,17 @@ import androidx.compose.ui.unit.dp
 import io.github.composefluent.component.Icon
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowExpand
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
-import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
-import top.ntutn.kica.model.ComicDetail
-import top.ntutn.kica.model.Episode
-import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.model.PageRef
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.action_failed
 import top.ntutn.kica.resources.copy_success
 import top.ntutn.kica.resources.fullscreen
-import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.reader_first_chapter
 import top.ntutn.kica.resources.reader_last_chapter
 import top.ntutn.kica.resources.reader_progress_adjusted
@@ -70,67 +61,33 @@ import top.ntutn.kica.ui.PlatformBackHandler
 import top.ntutn.kica.ui.component.EmptyContent
 import top.ntutn.kica.ui.component.FluentIconButton
 import top.ntutn.kica.ui.component.LoadStateContent
-import top.ntutn.kica.ui.progress
-import top.ntutn.kica.ui.toSummary
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ReaderContent(
-    comicId: String,
-    episodeId: String,
-    repository: PicaRepository,
-    library: LibraryRepository,
+    store: ReaderStore,
+    ui: ReaderUiState,
+    uiToken: Any,
     platformServices: PlatformServices,
-    start: ReaderStart,
-    episodes: List<Episode>,
-    memory: ReaderSessionMemory,
     onBack: () -> Unit,
 ) {
-    var refresh by remember { mutableIntStateOf(0) }
-    var mode by remember { mutableStateOf(start.mode) }
-    var fit by remember { mutableStateOf(if (start.mode == ReaderMode.VERTICAL) PageFit.WIDTH else PageFit.HEIGHT) }
+    val mode = ui.mode
+    val fit = ui.fit
+    val currentEpisodeId = ui.episodeId
+    val episodes = ui.episodes
+    val chapterChanging = ui.chapterChanging
+    val pagesState = ui.pages
+    val initialPage = ui.initialPage
     var controlsVisible by remember { mutableStateOf(true) }
-    val loadFailed = stringResource(Res.string.load_failed)
-    var currentEpisodeId by remember { mutableStateOf(episodeId) }
-    var pendingInitialPage by remember { mutableStateOf<Int?>(start.pageIndex) }
     var contextMenu by remember { mutableStateOf<ImageContextMenuState?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
     val copySuccessMsg = stringResource(Res.string.copy_success)
     val saveSuccessMsg = stringResource(Res.string.save_success)
     val failedMsg = stringResource(Res.string.action_failed)
-    val comic by produceState<ComicDetail?>(null, comicId) {
-        value = runCatching { repository.comic(comicId) }.getOrNull()
-    }
-    val episodeTitle by remember(episodes, currentEpisodeId) {
-        mutableStateOf(episodes.firstOrNull { it.id == currentEpisodeId }?.title ?: currentEpisodeId)
-    }
-    val pagesState by key(comicId, currentEpisodeId, refresh) {
-        produceState<LoadState<List<PageRef>>>(LoadState.Loading) {
-            value = runCatching { repository.pages(comicId, currentEpisodeId) }.fold(
-                onSuccess = { LoadState.Data(it) },
-                onFailure = { error ->
-                    val task = library.downloads().first()
-                        .firstOrNull { it.comic.id == comicId && it.episode.id == currentEpisodeId }
-                    val offline = task?.let {
-                        platformServices.fileLocationProvider.downloadedPages(it)
-                    }.orEmpty()
-                    if (offline.isNotEmpty()) {
-                        LoadState.Data(offline, fromCache = true)
-                    } else {
-                        LoadState.Error(error.message ?: loadFailed)
-                    }
-                },
-            )
-        }
-    }
     val scope = rememberCoroutineScope()
     val currentIndex = episodes.indexOfFirst { it.id == currentEpisodeId }
-    val nextEpisode = if (currentIndex >= 0) episodes.getOrNull(currentIndex + 1) else null
-    val prevEpisode = episodes.getOrNull(currentIndex - 1)
-    val canNext = nextEpisode != null
-    val canPrev = prevEpisode != null
-    var chapterChanging by remember { mutableStateOf(false) }
-    var currentReadPage by remember(currentEpisodeId) { mutableStateOf<Int?>(null) }
+    val canNext = currentIndex >= 0 && episodes.getOrNull(currentIndex + 1) != null
+    val canPrev = currentIndex > 0
     val bodyFocus = remember { FocusRequester() }
     val toolbarFocus = remember { ReaderToolbarFocus() }
     var bodyFocused by remember { mutableStateOf(false) }
@@ -144,17 +101,7 @@ internal fun ReaderContent(
     val firstChapterMessage = stringResource(Res.string.reader_first_chapter)
     val lastChapterMessage = stringResource(Res.string.reader_last_chapter)
     val onChangeChapter: (Boolean) -> Unit = { forward ->
-        val target = if (forward) nextEpisode else prevEpisode
-        if (target != null && !chapterChanging) {
-            chapterChanging = true
-            keyState.blockHeldKeys()
-            val targetPage = if (forward) 0 else Int.MAX_VALUE
-            pendingInitialPage = targetPage
-            currentEpisodeId = target.id
-            // Preserve navigation intent across app-lock unmounts, without persisting an unread page.
-            memory.episodeId = target.id
-            memory.position = ReaderStart(targetPage, mode, reportAdjustment = false)
-        }
+        if (store.changeChapter(forward)) keyState.blockHeldKeys()
     }
     val keyboardChangeChapter: (Boolean) -> Unit = { forward ->
         if (currentIndex >= 0 && !chapterChanging) {
@@ -162,43 +109,15 @@ internal fun ReaderContent(
             else toast = if (forward) lastChapterMessage else firstChapterMessage
         }
     }
-    val initialPage = pendingInitialPage ?: currentReadPage ?: 0
     val readingEpisodeId = currentEpisodeId
-    val readingMode = mode
-    val readingRefresh = refresh
-    val layoutToken = remember(currentEpisodeId, mode, refresh) { Any() }
-    val latestLayoutToken by rememberUpdatedState(layoutToken)
-    var active by remember { mutableStateOf(true) }
-    val writer = remember(library) { ReaderProgressWriter(scope, library) { toast = failedMsg } }
-    DisposableEffect(writer) {
-        onDispose { active = false; writer.close() }
-    }
+    val generation = ui.layoutGeneration
     val savePage: (Int) -> Unit = { page ->
-        if (active && layoutToken === latestLayoutToken && readingEpisodeId == currentEpisodeId && readingMode == mode && readingRefresh == refresh) {
-            currentReadPage = page
-            pendingInitialPage = null
-            chapterChanging = false
-            memory.episodeId = readingEpisodeId
-            memory.position = ReaderStart(page, readingMode)
-            writer.save(progress(comicId, readingEpisodeId, page, readingMode), comic?.toSummary(), episodeTitle)
-        }
+        store.reportPage(store.entryId, readingEpisodeId, generation, page, uiToken)
     }
     val adjustedMessage = stringResource(Res.string.reader_progress_adjusted)
-    val pageCount = (pagesState as? LoadState.Data)?.value?.size ?: 0
-    var initialPageChecked by remember { mutableStateOf(false) }
-    LaunchedEffect(currentEpisodeId, pageCount) {
-        if (!initialPageChecked && currentEpisodeId == episodeId && pageCount > 0) {
-            initialPageChecked = true
-            if (start.reportAdjustment && start.pageIndex != start.pageFor(pageCount)) toast = adjustedMessage
-        }
-    }
-    LaunchedEffect(mode) {
-        fit = when (mode) {
-            ReaderMode.VERTICAL -> PageFit.WIDTH
-            ReaderMode.PAGED_LEFT_TO_RIGHT, ReaderMode.PAGED_RIGHT_TO_LEFT,
-            ReaderMode.DOUBLE_LEFT_TO_RIGHT, ReaderMode.DOUBLE_RIGHT_TO_LEFT -> PageFit.HEIGHT
-        }
-    }
+    // Transient, localized presentation only; adjustment detection belongs to the store.
+    LaunchedEffect(ui.adjusted) { if (ui.adjusted) toast = adjustedMessage }
+    DisposableEffect(keyState) { onDispose { keyState.clear() } }
     LaunchedEffect(toast) {
         val msg = toast
         if (!msg.isNullOrBlank()) {
@@ -233,16 +152,20 @@ internal fun ReaderContent(
     }
     val handleCopy: (PageRef) -> Unit = { page ->
         scope.launch {
-            val ok = runCatching { platformServices.copyImage(page) }.getOrDefault(false)
-            toast = if (ok) copySuccessMsg else failedMsg
+            val ok = try { platformServices.copyImage(page) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { false }
+            if (store.isBound(uiToken)) toast = if (ok) copySuccessMsg else failedMsg
         }
     }
     val handleSave: (PageRef) -> Unit = { page ->
         scope.launch {
             nativeDialogActive = true
             try {
-                val ok = runCatching { platformServices.saveImage(page) }.getOrDefault(false)
-                toast = if (ok) saveSuccessMsg else failedMsg
+                val ok = try { platformServices.saveImage(page) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { false }
+                if (store.isBound(uiToken)) toast = if (ok) saveSuccessMsg else failedMsg
             } finally { nativeDialogActive = false }
         }
     }
@@ -292,12 +215,10 @@ internal fun ReaderContent(
                 toolbarScrollState = toolbarScrollState,
                 onBack = onBack,
                 onModeChange = {
-                    mode = it
-                    memory.episodeId = currentEpisodeId
-                    memory.position = (memory.position ?: start).copy(pageIndex = initialPage, mode = it)
+                    store.changeMode(it)
                     returnToBodyAfterMouse()
                 },
-                onFitChange = { fit = it; returnToBodyAfterMouse() },
+                onFitChange = { store.changeFit(it); returnToBodyAfterMouse() },
                 onHelp = openHelp,
                 onHide = { controlsVisible = false },
             )
@@ -314,8 +235,8 @@ internal fun ReaderContent(
                         bodyFocus.requestFocus()
                     }
                 } else Modifier)) {
-            LoadStateContent(pagesState, onRetry = { refresh++ }) { pages ->
-                key(currentEpisodeId, mode, refresh) {
+            LoadStateContent(pagesState, onRetry = store::retryPages) { pages ->
+                key(store.entryId, currentEpisodeId, mode, generation) {
                     when {
                         pages.isEmpty() -> EmptyContent()
                         mode == ReaderMode.VERTICAL -> VerticalReader(pages, initialPage, fit, savePage, canNext, canPrev, onChangeChapter, onImageMenu, keyboard.takeIf { platformServices.isDesktop }, keyboardChangeChapter)

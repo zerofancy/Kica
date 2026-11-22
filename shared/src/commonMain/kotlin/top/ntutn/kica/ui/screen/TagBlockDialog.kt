@@ -13,8 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.composefluent.component.Text
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.tagKey
@@ -62,30 +60,19 @@ internal fun TagBlockDialog(library: LibraryRepository, onDismiss: () -> Unit) {
     var input by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
+    val actions = checkNotNull(top.ntutn.kica.ui.store.LocalTagActions.current)
+    val action by actions.state.collectAsState()
+    val busy = action.busy
     var feedback by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    var seenVersion by remember { mutableIntStateOf(action.version) }
     val failed = stringResource(Res.string.tags_save_failed)
     val duplicate = stringResource(Res.string.tags_duplicate)
     val saved = stringResource(Res.string.tags_updated)
-    val update: ((Set<String>) -> Set<String>) -> Unit = { transform ->
-        if (!busy) {
-            busy = true
-            scope.launch {
-                try {
-                    library.updateBlockedTags(transform)
-                    feedback = saved
-                    input = ""
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    feedback = failed
-                } finally {
-                    busy = false
-                }
-            }
-        }
+    LaunchedEffect(action.version, action.error) {
+        if (action.version > seenVersion) { seenVersion = action.version; feedback = saved; input = "" }
+        if (action.error != null) feedback = failed
     }
+    val update = actions::update
     TagDialog(stringResource(Res.string.tags_manage, settings.blockedTags.size), onDismiss) {
         Text(stringResource(Res.string.tags_rules_hint))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

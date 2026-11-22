@@ -53,11 +53,15 @@ class ComicTagsWindowTest {
                 setSize(720, 600)
                 setLocation(60, 60)
                 setContent {
-                    KicaFluentTheme {
-                        PlatformBackHandler(true) { backs.incrementAndGet() }
-                        Column(Modifier.fillMaxSize().padding(20.dp)) {
-                            ComicTags("comic", listOf("Alpha", "Beta") + (3..12).map { "标签 $it" },
-                                library, platform, search::set)
+                    val actions = androidx.compose.runtime.remember { top.ntutn.kica.ui.store.TagActionStore(library) }
+                    androidx.compose.runtime.DisposableEffect(actions) { onDispose { actions.onDestroy() } }
+                    CompositionLocalProvider(top.ntutn.kica.ui.store.LocalTagActions provides actions) {
+                        KicaFluentTheme {
+                            PlatformBackHandler(true) { backs.incrementAndGet() }
+                            Column(Modifier.fillMaxSize().padding(20.dp)) {
+                                ComicTags("comic", listOf("Alpha", "Beta") + (3..12).map { "标签 $it" },
+                                    library, platform, search::set)
+                            }
                         }
                     }
                 }

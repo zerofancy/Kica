@@ -14,6 +14,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.ui.KicaApp
+import com.arkivanov.decompose.defaultComponentContext
+import top.ntutn.kica.ui.navigation.AppServices
+import top.ntutn.kica.ui.navigation.RootComponent
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -47,6 +50,10 @@ class MainActivity : ComponentActivity() {
         container.legacyStoragePermission.bind {
             legacyStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
+        val root = RootComponent(
+            defaultComponentContext(),
+            AppServices(container.pica, container.library, container.downloads, container.platform, container.titleTranslation),
+        )
         setContent {
             val settings by container.library.settings().collectAsState(initial = AppSettings())
             LaunchedEffect(settings.preventScreenshots) {
@@ -56,13 +63,7 @@ class MainActivity : ComponentActivity() {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 }
             }
-            KicaApp(
-                picaRepository = container.pica,
-                libraryRepository = container.library,
-                downloadCoordinator = container.downloads,
-                platformServices = container.platform,
-                titleTranslationService = container.titleTranslation,
-            )
+            KicaApp(root)
         }
     }
 

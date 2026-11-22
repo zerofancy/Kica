@@ -1,6 +1,5 @@
 package top.ntutn.kica.ui.screen
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -33,30 +29,22 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.stringResource
-import top.ntutn.kica.data.DownloadCoordinator
 import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
-import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.DownloadStatus
 import top.ntutn.kica.model.HistoryEntry
-import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.cancel
 import top.ntutn.kica.resources.downloads
 import top.ntutn.kica.resources.favorites
 import top.ntutn.kica.resources.history
-import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.pause
 import top.ntutn.kica.resources.resume
 import top.ntutn.kica.ui.rememberComicFilter
 import top.ntutn.kica.ui.ComicFilterNotice
-import top.ntutn.kica.data.cancellableResult
 import top.ntutn.kica.ui.component.ComicGrid
-import top.ntutn.kica.ui.component.ComicGridPage
 import top.ntutn.kica.ui.component.EmptyContent
 import top.ntutn.kica.ui.component.FluentCard
 import top.ntutn.kica.ui.component.FluentProgressBar
@@ -69,68 +57,21 @@ import top.ntutn.kica.ui.PlatformVerticalScrollbar
 
 @Composable
 internal fun FavoritesScreen(
-    repository: PicaRepository,
+    store: top.ntutn.kica.ui.store.ComicListStore,
     library: LibraryRepository,
     onComicClick: (ComicSummary) -> Unit,
 ) {
-    var refresh by remember { mutableIntStateOf(0) }
-    val loadFailed = stringResource(Res.string.load_failed)
-    var state by remember { mutableStateOf<LoadState<List<ComicSummary>>>(LoadState.Loading) }
-    var loadedPage by remember { mutableIntStateOf(0) }
-    var loadedPages by remember { mutableStateOf<List<ComicGridPage>>(emptyList()) }
-    var totalPages by remember { mutableIntStateOf(0) }
-    var loadingMore by remember { mutableStateOf(false) }
-    var loadMoreError by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(refresh) {
-        loadedPage = 0
-        loadedPages = emptyList()
-        totalPages = 0
-        loadingMore = false
-        loadMoreError = null
-        state = LoadState.Loading
-        state = cancellableResult { repository.favorites(page = 1) }.fold(
-            onSuccess = { result ->
-                loadedPage = result.page
-                loadedPages = listOf(ComicGridPage(result.page, result.items.map { it.id }))
-                totalPages = result.totalPages
-                LoadState.Data(result.items)
-            },
-            onFailure = { LoadState.Error(it.message ?: loadFailed) },
-        )
-    }
-    val canLoadMore = state is LoadState.Data && loadedPage < totalPages
-    val requestLoadMore: () -> Unit = request@{
-        if (!canLoadMore || loadingMore) return@request
-        val nextPage = loadedPage + 1
-        val requestedRefresh = refresh
-        loadingMore = true
-        loadMoreError = null
-        scope.launch {
-            val result = cancellableResult { repository.favorites(page = nextPage) }
-            if (refresh != requestedRefresh) return@launch
-            result.fold(
-                onSuccess = { page ->
-                    loadedPages = loadedPages + ComicGridPage(nextPage, page.items.map { it.id })
-                    val existing = (state as? LoadState.Data)?.value.orEmpty()
-                    val merged = (existing + page.items)
-                        .distinctBy(ComicSummary::id)
-                    state = LoadState.Data(merged)
-                    loadedPage = maxOf(nextPage, page.page)
-                    totalPages = page.totalPages
-                },
-                onFailure = {
-                    loadMoreError = it.message ?: loadFailed
-                },
-            )
-            loadingMore = false
-        }
-    }
+    val list by store.state.collectAsState()
+    val state = list.result
+    val loadedPages = list.pages
+    val loadingMore = list.loadingMore
+    val loadMoreError = list.loadMoreError
+    val canLoadMore = list.canLoadMore
+    val requestLoadMore = store::loadMore
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.favorites))
         Box(Modifier.weight(1f)) {
-            LoadStateContent(state, onRetry = { refresh++ }) {
+            LoadStateContent(state, onRetry = store::retry) {
                 ComicGrid(
                     comics = it,
                     onComicClick = onComicClick,
@@ -139,6 +80,7 @@ internal fun FavoritesScreen(
                     loadMoreError = loadMoreError,
                     onLoadMore = requestLoadMore,
                     pages = loadedPages,
+                    anchorReady = !list.restoringRange,
                 )
             }
         }
@@ -146,18 +88,20 @@ internal fun FavoritesScreen(
 }
 
 @Composable
-internal fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -> Unit) {
-    val historyItems by library.history().collectAsState(initial = emptyList())
+internal fun HistoryScreen(store: top.ntutn.kica.ui.store.LibraryStore, library: LibraryRepository, onClick: (HistoryEntry) -> Unit) {
+    val historyItems by store.history.collectAsState()
     val listState = rememberLazyListState()
-    var visibleLimit by remember { mutableIntStateOf(30) }
+    val options by store.options.collectAsState()
+    val visibleLimit = options.visibleLimit
     val filter = rememberComicFilter(historyItems.map { it.comic }, library, verificationLimit = visibleLimit)
-    AutoVerifyLibrary(listState, filter) { visibleLimit += 30 }
-    var showHidden by remember { mutableStateOf(false) }
+    AutoVerifyLibrary(listState, filter) { store.verifyMore() }
+    val showHidden = options.showHidden
     val visibleIds = filter.visible.map { it.id }.toSet()
     val visible = historyItems.filter { showHidden || it.comic.id in visibleIds }
+    top.ntutn.kica.ui.component.PreserveListAnchor(listState, visible.map { it.comic.id }, ready = filter.pending == 0)
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.history))
-        ComicFilterNotice(filter, library, showHidden) { showHidden = !showHidden }
+        ComicFilterNotice(filter, library, showHidden) { store.toggleHidden() }
         if (visible.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
@@ -201,21 +145,23 @@ internal fun HistoryScreen(library: LibraryRepository, onClick: (HistoryEntry) -
 
 @Composable
 internal fun DownloadsScreen(
-    coordinator: DownloadCoordinator,
+    store: top.ntutn.kica.ui.store.LibraryStore,
     library: LibraryRepository,
 ) {
-    val tasks by coordinator.tasks.collectAsState()
+    val tasks by store.tasks.collectAsState()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    var visibleLimit by remember { mutableIntStateOf(30) }
+    val options by store.options.collectAsState()
+    val visibleLimit = options.visibleLimit
     val filter = rememberComicFilter(tasks.map { it.comic }, library, verificationLimit = visibleLimit)
-    AutoVerifyLibrary(listState, filter) { visibleLimit += 30 }
-    var showHidden by remember { mutableStateOf(false) }
+    AutoVerifyLibrary(listState, filter) { store.verifyMore() }
+    val showHidden = options.showHidden
     val visibleIds = filter.visible.map { it.id }.toSet()
     val visible = tasks.filter { showHidden || it.comic.id in visibleIds }
+    top.ntutn.kica.ui.component.PreserveListAnchor(listState, visible.map { it.id }, ready = filter.pending == 0)
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         SectionTitle(stringResource(Res.string.downloads))
-        ComicFilterNotice(filter, library, showHidden) { showHidden = !showHidden }
+        ComicFilterNotice(filter, library, showHidden) { store.toggleHidden() }
         if (visible.isEmpty()) {
             EmptyContent(Modifier.weight(1f))
         } else {
@@ -241,17 +187,17 @@ internal fun DownloadsScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     when (task.status) {
                                         DownloadStatus.RUNNING, DownloadStatus.QUEUED ->
-                                            FluentTextButton(onClick = { scope.launch { coordinator.pause(task.id) } }) {
+                                            FluentTextButton(onClick = { store.pause(task.id) }) {
                                                 Text(stringResource(Res.string.pause))
                                             }
                                         DownloadStatus.PAUSED, DownloadStatus.FAILED ->
-                                            FluentTextButton(onClick = { scope.launch { coordinator.resume(task.id) } }) {
+                                            FluentTextButton(onClick = { store.resume(task.id) }) {
                                                 Text(stringResource(Res.string.resume))
                                             }
                                         else -> Unit
                                     }
                                     if (task.status != DownloadStatus.COMPLETED) {
-                                        FluentTextButton(onClick = { scope.launch { coordinator.cancel(task.id) } }) {
+                                        FluentTextButton(onClick = { store.cancel(task.id) }) {
                                             Text(stringResource(Res.string.cancel))
                                         }
                                     }

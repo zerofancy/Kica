@@ -16,9 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,17 +25,12 @@ import androidx.compose.ui.window.Dialog
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import top.ntutn.kica.data.LibraryRepository
 import top.ntutn.kica.data.PlatformServices
 import top.ntutn.kica.data.TitleTranslationState
 import top.ntutn.kica.data.sha256
-import top.ntutn.kica.model.AppSettings
-import top.ntutn.kica.model.NetworkSettings
 import top.ntutn.kica.model.ProxyMode
-import top.ntutn.kica.model.ThemePreference
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.about
 import top.ntutn.kica.resources.about_text
@@ -70,10 +63,6 @@ import top.ntutn.kica.resources.proxy_socks5
 import top.ntutn.kica.resources.proxy_system
 import top.ntutn.kica.resources.retry
 import top.ntutn.kica.resources.settings
-import top.ntutn.kica.resources.theme
-import top.ntutn.kica.resources.theme_dark
-import top.ntutn.kica.resources.theme_light
-import top.ntutn.kica.resources.theme_system
 import top.ntutn.kica.resources.title_translation
 import top.ntutn.kica.resources.title_translation_description
 import top.ntutn.kica.resources.translation_model_downloading
@@ -90,7 +79,6 @@ import top.ntutn.kica.ui.component.FluentTextButton
 import top.ntutn.kica.ui.component.FluentTextField
 import top.ntutn.kica.ui.component.SectionTitle
 import top.ntutn.kica.ui.progress
-import top.ntutn.kica.ui.state.LocalTitleTranslationService
 import top.ntutn.kica.ui.screen.SettingCard
 import top.ntutn.kica.ui.screen.ModelDownloadConfirmationDialog
 import top.ntutn.kica.ui.PlatformHorizontalScrollbar
@@ -100,29 +88,19 @@ import top.ntutn.kica.ui.PlatformBackHandler
 
 @Composable
 internal fun SettingsScreen(
+    store: top.ntutn.kica.ui.store.SettingsStore,
     library: LibraryRepository,
     platformServices: PlatformServices,
     onLogout: () -> Unit,
 ) {
-    val settingsValue: AppSettings by library.settings().collectAsState(initial = AppSettings())
-    val titleTranslationService = LocalTitleTranslationService.current
-    val tagResolver = top.ntutn.kica.ui.LocalTagResolver.current
-    val translationState = titleTranslationService?.state?.collectAsState()?.value
-        ?: TitleTranslationState.Disabled
-    val translationModelAvailable by produceState(false, titleTranslationService, translationState) {
-        value = titleTranslationService?.isModelAvailable() == true
-    }
-    val scope = rememberCoroutineScope()
-    val downloadLocation by produceState("") {
-        value = platformServices.fileLocationProvider.defaultDownloadLocation()
-    }
-    var proxyHost by remember(settingsValue.network.proxyHost) {
-        mutableStateOf(settingsValue.network.proxyHost)
-    }
-    var proxyPort by remember(settingsValue.network.proxyPort) {
-        mutableStateOf(settingsValue.network.proxyPort.takeIf { it > 0 }?.toString().orEmpty())
-    }
-    var exportLocation: String? by remember { mutableStateOf<String?>(null) }
+    val settingsValue by store.settings.collectAsState()
+    val translationState by store.translation.collectAsState()
+    val translationModelAvailable by store.modelAvailable.collectAsState()
+    val downloadLocation by store.downloadLocation.collectAsState()
+    val draft by store.draft.collectAsState()
+    val proxyHost = draft.proxyHost
+    val proxyPort = draft.proxyPort
+    val exportLocation by store.exportLocation.collectAsState()
     var showModelConfirmation by remember { mutableStateOf(false) }
     var showLockDialog by remember { mutableStateOf(false) }
     var showClearLockDialog by remember { mutableStateOf(false) }
@@ -130,25 +108,18 @@ internal fun SettingsScreen(
     val proxyModeScrollState = rememberScrollState()
     val translationBusy = translationState is TitleTranslationState.Downloading ||
         translationState == TitleTranslationState.LoadingModel
-    val enableTitleTranslation: () -> Unit = {
-        titleTranslationService?.let { service ->
-            scope.launch {
-                runCatching { service.enable() }
-                    .onSuccess {
-                        library.updateSettings(
-                            library.settings().first().copy(titleTranslationEnabled = true),
-                        )
-                    }
-            }
-        }
-    }
+    val enableTitleTranslation = store::enableTranslation
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(settingsScrollState).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
         SectionTitle(stringResource(Res.string.settings))
-        ThemeSettingsCard(library)
+        val operationError by store.error.collectAsState()
+        val saving by store.saving.collectAsState()
+        if (saving) FluentProgressBar(Modifier.fillMaxWidth())
+        operationError?.let { Text(it, color = FluentTheme.colors.system.critical) }
+        ThemeSettingsCard(store)
         TagBlockSettingsEntry(library)
         SettingCard(stringResource(Res.string.lock_screen)) {
             Text(
@@ -163,13 +134,9 @@ internal fun SettingsScreen(
                     if (enabled && !hasAnyPassword) {
                         showLockDialog = true
                     } else if (enabled) {
-                        scope.launch {
-                            library.updateSettings(settingsValue.copy(lockEnabled = true))
-                        }
+                        store.update { current -> current.copy(lockEnabled = true) }
                     } else {
-                        scope.launch {
-                            library.updateSettings(settingsValue.copy(lockEnabled = false))
-                        }
+                        store.update { current -> current.copy(lockEnabled = false) }
                     }
                 },
             )
@@ -213,9 +180,7 @@ internal fun SettingsScreen(
                 Switcher(
                     checked = settingsValue.preventScreenshots,
                     onCheckStateChange = { enabled ->
-                        scope.launch {
-                            library.updateSettings(settingsValue.copy(preventScreenshots = enabled))
-                        }
+                        store.update { current -> current.copy(preventScreenshots = enabled) }
                     },
                 )
             }
@@ -241,22 +206,10 @@ internal fun SettingsScreen(
             Switcher(
                 checked = settingsValue.titleTranslationEnabled,
                 onCheckStateChange = { enabled ->
-                    if (translationBusy || titleTranslationService == null) return@Switcher
-                    if (!enabled) {
-                        scope.launch {
-                            library.updateSettings(
-                                library.settings().first().copy(titleTranslationEnabled = false),
-                            )
-                            titleTranslationService.disable()
-                        }
-                    } else {
-                        scope.launch {
-                            if (titleTranslationService.isModelAvailable()) {
-                                enableTitleTranslation()
-                            } else {
-                                showModelConfirmation = true
-                            }
-                        }
+                    if (!translationBusy) {
+                        if (!enabled) store.disableTranslation()
+                        else if (translationModelAvailable) store.enableTranslation()
+                        else showModelConfirmation = true
                     }
                 },
             )
@@ -279,7 +232,7 @@ internal fun SettingsScreen(
                         style = FluentTheme.typography.caption,
                     )
                     FluentProgressBar(progress.coerceIn(0f, 1f), Modifier.fillMaxWidth())
-                    FluentTextButton(onClick = { titleTranslationService?.cancelPreparation() }) {
+                    FluentTextButton(onClick = { store.cancelTranslation() }) {
                         Text(stringResource(Res.string.cancel))
                     }
                 }
@@ -318,11 +271,7 @@ internal fun SettingsScreen(
                         FluentChip(
                             selected = settingsValue.network.proxyMode == mode,
                             onClick = {
-                                scope.launch {
-                                    library.updateSettings(
-                                        settingsValue.copy(network = settingsValue.network.copy(proxyMode = mode)),
-                                    )
-                                }
+                                store.update { current -> current.copy(network = current.network.copy(proxyMode = mode)) }
                             },
                             label = { Text(stringResource(label)) },
                         )
@@ -334,34 +283,14 @@ internal fun SettingsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FluentTextField(
                         value = proxyHost,
-                        onValueChange = { value ->
-                            proxyHost = value
-                            scope.launch {
-                                library.updateSettings(
-                                    settingsValue.copy(network = settingsValue.network.copy(proxyHost = value)),
-                                )
-                            }
-                        },
+                        onValueChange = store::host,
                         label = { Text(stringResource(Res.string.proxy_host)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     FluentTextField(
                         value = proxyPort,
-                        onValueChange = { value ->
-                            if (value.all(Char::isDigit) && value.length <= 5) {
-                                proxyPort = value
-                                scope.launch {
-                                    library.updateSettings(
-                                        settingsValue.copy(
-                                            network = settingsValue.network.copy(
-                                                proxyPort = value.toIntOrNull() ?: 0,
-                                            ),
-                                        ),
-                                    )
-                                }
-                            }
-                        },
+                        onValueChange = store::port,
                         label = { Text(stringResource(Res.string.proxy_port)) },
                         singleLine = true,
                         modifier = Modifier.width(120.dp),
@@ -374,9 +303,7 @@ internal fun SettingsScreen(
             if (!platformServices.isDesktop) {
                 FluentButton(
                     onClick = {
-                        scope.launch {
-                            exportLocation = platformServices.fileLocationProvider.chooseExportLocation()
-                        }
+                        store.chooseExport()
                     },
                 ) {
                     Text(stringResource(Res.string.choose_export_location))
@@ -386,11 +313,7 @@ internal fun SettingsScreen(
         }
         SettingCard(stringResource(Res.string.cache)) {
             FluentButton(onClick = {
-                scope.launch {
-                    library.clearCache()
-                    tagResolver?.clearMemoryCache()
-                    titleTranslationService?.clearCache()
-                }
+                store.clearCache()
             }) {
                 Text(stringResource(Res.string.clear_cache))
             }
@@ -418,15 +341,11 @@ internal fun SettingsScreen(
             LockSettingsDialog(
                 onConfirm = { password ->
                     showLockDialog = false
-                    scope.launch {
-                        library.updateSettings(
-                            settingsValue.copy(
+                    store.update { current -> current.copy(
                                 lockEnabled = true,
                                 lockPasswordHash = sha256(password),
                                 lockPatternHash = null,
-                            ),
-                        )
-                    }
+                            ) }
                 },
                 onDismiss = { showLockDialog = false },
             )
@@ -434,15 +353,11 @@ internal fun SettingsScreen(
             PatternLockSettingsDialog(
                 onConfirm = { pattern ->
                     showLockDialog = false
-                    scope.launch {
-                        library.updateSettings(
-                            settingsValue.copy(
+                    store.update { current -> current.copy(
                                 lockEnabled = true,
                                 lockPatternHash = sha256(pattern),
                                 lockPasswordHash = null,
-                            ),
-                        )
-                    }
+                            ) }
                 },
                 onDismiss = { showLockDialog = false },
             )
@@ -468,15 +383,11 @@ internal fun SettingsScreen(
                         FluentPrimaryButton(
                             onClick = {
                                 showClearLockDialog = false
-                                scope.launch {
-                                    library.updateSettings(
-                                        settingsValue.copy(
+                                store.update { current -> current.copy(
                                             lockEnabled = false,
                                             lockPasswordHash = null,
                                             lockPatternHash = null,
-                                        ),
-                                    )
-                                }
+                                        ) }
                             },
                         ) {
                             Text(stringResource(Res.string.confirm))

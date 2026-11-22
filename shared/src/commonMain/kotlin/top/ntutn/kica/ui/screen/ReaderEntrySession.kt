@@ -3,20 +3,9 @@ package top.ntutn.kica.ui.screen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CancellationException
-import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
-
-/** Retained only while the route stays on the app stack, including temporary app-lock screens. */
-internal class ReaderSessionMemory {
-    val entry = ReaderEntrySession()
-    var episodeId: String? = null
-    var position: ReaderStart? = null
-}
-
-internal val LocalReaderSessions = staticCompositionLocalOf<MutableMap<AppRoute.Reader, ReaderSessionMemory>?> { null }
 
 internal data class ReaderStart(
     val pageIndex: Int = 0,
@@ -38,8 +27,8 @@ internal sealed interface ReaderEntryState {
 }
 
 /** One external entry, not one chapter. Internal chapter changes never read this gate again. */
-internal class ReaderEntrySession {
-    var state: ReaderEntryState by mutableStateOf(ReaderEntryState.Checking)
+internal class ReaderEntrySession(initialState: ReaderEntryState = ReaderEntryState.Checking) {
+    var state: ReaderEntryState by mutableStateOf(initialState)
         private set
     private var generation = 0
 

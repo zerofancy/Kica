@@ -177,19 +177,20 @@ sealed interface LoadState<out T> {
     data class Error(val message: String, val canRetry: Boolean = true) : LoadState<Nothing>
 }
 
+@Serializable
 sealed interface AppRoute {
-    data object Home : AppRoute
-    data object Discover : AppRoute
-    data object RandomComics : AppRoute
-    data object Favorites : AppRoute
-    data object History : AppRoute
-    data object Downloads : AppRoute
-    data object Settings : AppRoute
-    data class Search(
+    @Serializable data object Home : AppRoute
+    @Serializable data object Discover : AppRoute
+    @Serializable data object RandomComics : AppRoute
+    @Serializable data object Favorites : AppRoute
+    @Serializable data object History : AppRoute
+    @Serializable data object Downloads : AppRoute
+    @Serializable data object Settings : AppRoute
+    @Serializable data class Search(
         val initialQuery: String = "",
         val category: String? = null,
         val fromTag: Boolean = false,
     ) : AppRoute
-    data class Detail(val comicId: String) : AppRoute
-    data class Reader(val comicId: String, val episodeId: String) : AppRoute
+    @Serializable data class Detail(val comicId: String) : AppRoute
+    @Serializable data class Reader(val comicId: String, val episodeId: String) : AppRoute
 }

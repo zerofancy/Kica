@@ -14,6 +14,10 @@ kotlin {
         namespace = "top.ntutn.kica.shared"
         compileSdk = 37
         minSdk = 26
+        withHostTest {}
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
@@ -34,6 +38,11 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.resources)
             implementation(libs.compose.fluent)
+            api(libs.decompose)
+            implementation(libs.decompose.compose)
+            api(libs.essenty.lifecycle)
+            api(libs.essenty.instance.keeper)
+            api(libs.essenty.state.keeper)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
@@ -50,6 +59,12 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.core.ktx)
+            }
+        }
+        named("androidDeviceTest") {
+            dependencies {
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
             }
         }
         named("desktopMain") {
@@ -122,7 +137,12 @@ compose.resources {
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    // Window tests must render deterministic pixels even when CI/remote X11 has no usable GPU.
+    // This affects test JVMs only, not the packaged desktop application.
+    systemProperty("skiko.renderApi", "SOFTWARE")
+    systemProperty("skiko.vsync.enabled", "false")
     // Changing the opt-in must invalidate an otherwise up-to-date test run.
     inputs.property("readerWindowTest", providers.environmentVariable("KICA_READER_WINDOW_TEST").orElse("0"))
     inputs.property("tagWindowTest", providers.environmentVariable("KICA_TAG_WINDOW_TEST").orElse("0"))
+    inputs.property("testDisplay", providers.environmentVariable("DISPLAY").orElse("headless"))
 }

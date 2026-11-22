@@ -1,40 +1,40 @@
 package top.ntutn.kica.ui
 
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.awt.ComposeWindow
+import com.arkivanov.decompose.DefaultComponentContext
+import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import java.lang.reflect.Proxy
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.swing.SwingUtilities
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
-import top.ntutn.kica.data.InMemoryLibraryRepository
-import top.ntutn.kica.data.PicaRepository
-import top.ntutn.kica.model.AppRoute
+import top.ntutn.kica.data.*
 import top.ntutn.kica.model.ComicPage
 import top.ntutn.kica.model.ComicSummary
 import top.ntutn.kica.model.LoadState
-import top.ntutn.kica.ui.screen.LocalSearchPages
-import top.ntutn.kica.ui.screen.SearchCriteria
-import top.ntutn.kica.ui.screen.SearchPageState
+import top.ntutn.kica.ui.navigation.AppServices
+import top.ntutn.kica.ui.navigation.SessionData
 import top.ntutn.kica.ui.screen.SearchScreen
+import top.ntutn.kica.ui.store.ComicListStore
+import top.ntutn.kica.ui.store.SearchSnapshot
 import top.ntutn.kica.ui.theme.KicaFluentTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SearchStateWindowTest {
+    private inline fun <reified T> unused(): T = Proxy.newProxyInstance(T::class.java.classLoader,
+        arrayOf(T::class.java)) { _, method, _ -> error("Unexpected call: ${method.name}") } as T
+
     @Test
-    fun cancelledSearchCanReturnToPreviousCriteriaAndRestoreWithoutReloading() {
+    fun supersededSearchAndRemountKeepTheSameStore() {
         assumeTrue(System.getenv("KICA_TAG_WINDOW_TEST") == "1")
         val requests = CopyOnWriteArrayList<String>()
         val pending = CompletableDeferred<ComicPage>()
-        val unused = Proxy.newProxyInstance(PicaRepository::class.java.classLoader,
-            arrayOf(PicaRepository::class.java)) { _, method, _ ->
-            error("Unexpected call: ${method.name}")
-        } as PicaRepository
-        val repository = object : PicaRepository by unused {
+        val repository = object : PicaRepository by unused<PicaRepository>() {
             override suspend fun search(keyword: String, categories: List<String>, page: Int): ComicPage {
                 requests.add(keyword)
                 return if (keyword == "second") pending.await()
@@ -42,20 +42,18 @@ class SearchStateWindowTest {
             }
         }
         val library = InMemoryLibraryRepository()
-        val page = SearchPageState("first", null, true)
-        val pages = mutableMapOf(AppRoute.Search("first", fromTag = true).toString() to page)
+        val services = AppServices(repository, library, unused(), unused(), unused())
+        val session = SessionData(DefaultComponentContext(LifecycleRegistry()), services)
+        val store = ComicListStore(services, session, false, SearchSnapshot(query = "first", keyword = "first", fromTag = true))
         val mounted = mutableStateOf(true)
         lateinit var window: ComposeWindow
         SwingUtilities.invokeAndWait {
+            store.ensureLoaded()
             window = ComposeWindow().apply {
                 setSize(720, 600)
-                setContent {
-                    KicaFluentTheme {
-                        CompositionLocalProvider(LocalSearchPages provides pages) {
-                            if (mounted.value) SearchScreen(repository, library, "first", null, true, {}, {})
-                        }
-                    }
-                }
+                setContent { KicaFluentTheme {
+                    if (mounted.value) SearchScreen(store, library, "first", null, true, {}, {})
+                } }
                 isVisible = true
             }
         }
@@ -65,28 +63,26 @@ class SearchStateWindowTest {
                 SwingUtilities.invokeAndWait { Snapshot.sendApplyNotifications(); window.repaint() }
                 Thread.sleep(50)
             } while (!check() && System.nanoTime() < deadline)
-            assertTrue(check(), "Requests: $requests; result: ${page.result.value}")
+            assertTrue(check(), "Requests: $requests; result: ${store.state.value.result}")
         }
         try {
-            pumpUntil { page.completed != null }
-            SwingUtilities.invokeAndWait { page.criteria.value = SearchCriteria("second", null) }
-            pumpUntil { requests.contains("second") && page.result.value == LoadState.Loading }
-            SwingUtilities.invokeAndWait { page.criteria.value = SearchCriteria("first", null) }
-            pumpUntil { page.completed == (SearchCriteria("first", null) to 0) }
+            pumpUntil { store.state.value.result is LoadState.Data }
+            SwingUtilities.invokeAndWait { store.editQuery("second"); store.submit() }
+            pumpUntil { requests.contains("second") }
+            SwingUtilities.invokeAndWait { store.editQuery("first"); store.submit() }
+            pumpUntil { requests.size == 3 && store.state.value.result is LoadState.Data }
             assertEquals(listOf("first", "second", "first"), requests.toList())
-            assertTrue(page.result.value is LoadState.Data)
-            val generation = page.generation
             SwingUtilities.invokeAndWait { mounted.value = false }
-            pumpUntil { page.generation > generation }
-            SwingUtilities.invokeAndWait { mounted.value = true }
+            SwingUtilities.invokeAndWait { mounted.value = true; store.ensureLoaded() }
             repeat(10) {
                 SwingUtilities.invokeAndWait { Snapshot.sendApplyNotifications(); window.repaint() }
                 Thread.sleep(50)
             }
             assertEquals(listOf("first", "second", "first"), requests.toList())
-            assertTrue(page.result.value is LoadState.Data)
+            assertTrue(store.state.value.result is LoadState.Data)
         } finally {
-            SwingUtilities.invokeAndWait { window.dispose() }
+            SwingUtilities.invokeAndWait { store.onDestroy(); window.dispose() }
+            runBlocking { session.close() }
         }
     }
 }

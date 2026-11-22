@@ -17,10 +17,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import org.junit.Assume.assumeTrue
 import top.ntutn.kica.data.*
 import top.ntutn.kica.model.*
-import top.ntutn.kica.ui.screen.ReaderScreen
+import top.ntutn.kica.ui.screen.ReaderStoreScreen
+import top.ntutn.kica.ui.screen.ReaderStore
+import top.ntutn.kica.ui.navigation.SessionProgressCoordinator
 import top.ntutn.kica.ui.theme.KicaFluentTheme
 
 /** Opt in with KICA_READER_WINDOW_TEST=1 on a desktop. Uses synthetic local images and no account. */
@@ -71,6 +77,9 @@ class ReaderKeyboardWindowTest {
                 "saveImage" -> { saves.incrementAndGet(); true }
                 else -> error("Unexpected platform call: $name")
             } }
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            val writer = SessionProgressCoordinator(scope, library)
+            val store = ReaderStore("keyboard-fixture", "comic", "e1", repository, library, writer, ReaderTestFiles)
             lateinit var window: ComposeWindow
             onEdt {
                 window = ComposeWindow().apply {
@@ -80,7 +89,7 @@ class ReaderKeyboardWindowTest {
                     setContent {
                         KicaFluentTheme {
                             PlatformBackHandler(true) { back.incrementAndGet() }
-                            ReaderScreen("comic", "e1", repository, library, platform) { back.incrementAndGet() }
+                            ReaderStoreScreen(store, platform) { back.incrementAndGet() }
                         }
                     }
                     isVisible = true
@@ -237,7 +246,8 @@ class ReaderKeyboardWindowTest {
                 robot.keyRelease(KeyEvent.VK_PAGE_DOWN)
                 robot.keyRelease(KeyEvent.VK_DOWN)
                 robot.keyRelease(KeyEvent.VK_ESCAPE)
-                onEdt { window.dispose() }
+                runBlocking { writer.close() }
+                onEdt { store.onDestroy(); scope.cancel(); window.dispose() }
             }
         }
     }

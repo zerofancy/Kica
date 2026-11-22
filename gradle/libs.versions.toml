@@ -22,6 +22,9 @@ jna = "5.19.1"
 filekit = "0.17.0"
 compose-fluent = "0.2.0-dev-20261114.1"
 llamatik = "1.10.1"
+decompose = "3.6.2"
+essenty = "2.7.1"
+androidx-test = "1.7.0"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-runtime" }
@@ -66,6 +69,17 @@ filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version.ref =
 
 # Compose
 compose-fluent = { module = "com.github.zerofancy.compose-fluent-ui:fluent", version.ref = "compose-fluent" }
+
+# Android instrumentation
+androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "androidx-test" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test" }
+
+# Navigation and lifecycle
+decompose = { module = "com.arkivanov.decompose:decompose", version.ref = "decompose" }
+decompose-compose = { module = "com.arkivanov.decompose:extensions-compose", version.ref = "decompose" }
+essenty-lifecycle = { module = "com.arkivanov.essenty:lifecycle", version.ref = "essenty" }
+essenty-instance-keeper = { module = "com.arkivanov.essenty:instance-keeper", version.ref = "essenty" }
+essenty-state-keeper = { module = "com.arkivanov.essenty:state-keeper", version.ref = "essenty" }
 
 # Other
 llamatik-library = { module = "com.llamatik:library", version.ref = "llamatik" }

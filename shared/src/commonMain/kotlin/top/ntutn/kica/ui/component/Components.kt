@@ -120,11 +120,12 @@ fun ComicGrid(
     onLoadMore: () -> Unit = {},
     pages: List<ComicGridPage> = emptyList(),
     state: LazyGridState = rememberLazyGridState(),
+    anchorReady: Boolean = true,
 ) {
     val library = LocalTagLibrary.current
     if (library == null) {
         RawComicGrid(comicGridEntries(comics, pages), onComicClick, modifier, loadingMore, canLoadMore,
-            loadMoreError, onLoadMore, pages.lastOrNull()?.number ?: comics.size, state)
+            loadMoreError, onLoadMore, pages.lastOrNull()?.number ?: comics.size, state, anchorReady)
         return
     }
     val filter = rememberComicFilter(comics, library)
@@ -134,6 +135,7 @@ fun ComicGrid(
         canLoadMore && filter.pending == 0, loadMoreError, onLoadMore,
         pages.lastOrNull()?.number ?: comics.size,
         state,
+        anchorReady = anchorReady && filter.pending == 0,
     ) {
         Column {
             ComicFilterNotice(filter, library)
@@ -155,8 +157,11 @@ private fun RawComicGrid(
     onLoadMore: () -> Unit,
     paginationToken: Int,
     gridState: LazyGridState,
+    anchorReady: Boolean = true,
     header: (@Composable () -> Unit)? = null,
 ) {
+    PreserveGridAnchor(gridState, (if (header == null) emptyList() else listOf("filter-status")) + entries.map { it.key },
+        ready = !loadingMore && anchorReady)
     if (entries.isEmpty() && !loadingMore && loadMoreError == null && header == null) {
         EmptyContent(modifier)
         return

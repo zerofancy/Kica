@@ -1,335 +1,100 @@
 package top.ntutn.kica.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
-import io.github.composefluent.FluentTheme
+import com.arkivanov.decompose.extensions.compose.stack.Children
+import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import io.github.composefluent.background.Mica
-import io.github.composefluent.component.Icon
-import io.github.composefluent.component.NavigationDisplayMode
-import io.github.composefluent.component.NavigationView
-import io.github.composefluent.component.Text
-import io.github.composefluent.component.menuItem
-import io.github.composefluent.component.rememberNavigationState
-import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.ArrowDownload
-import io.github.composefluent.icons.regular.Heart
-import io.github.composefluent.icons.regular.History
-import io.github.composefluent.icons.regular.Home
-import io.github.composefluent.icons.regular.Navigation
-import io.github.composefluent.icons.regular.Settings
-import kotlinx.coroutines.launch
-import kotlin.time.Clock
-import org.jetbrains.compose.resources.StringResource
-import org.jetbrains.compose.resources.stringResource
-import top.ntutn.kica.data.DownloadCoordinator
-import top.ntutn.kica.data.ComicTagResolver
-import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
-import top.ntutn.kica.data.PlatformServices
-import top.ntutn.kica.data.TitleTranslationService
 import top.ntutn.kica.model.AppRoute
-import top.ntutn.kica.model.ThemePreference
-import top.ntutn.kica.resources.Res
-import top.ntutn.kica.resources.discover
-import top.ntutn.kica.resources.downloads
-import top.ntutn.kica.resources.favorites
-import top.ntutn.kica.resources.history
-import top.ntutn.kica.resources.home
-import top.ntutn.kica.resources.login_failed
-import top.ntutn.kica.resources.settings
+import top.ntutn.kica.ui.component.FluentProgressRing
+import top.ntutn.kica.ui.navigation.MainComponent
+import top.ntutn.kica.ui.navigation.RootComponent
 import top.ntutn.kica.ui.screen.LockScreen
-import top.ntutn.kica.ui.screen.LocalReaderSessions
-import top.ntutn.kica.ui.screen.ReaderSessionMemory
 import top.ntutn.kica.ui.screen.PatternLockScreen
-import top.ntutn.kica.ui.screen.SearchPageState
-import top.ntutn.kica.ui.screen.LocalSearchPages
+import top.ntutn.kica.ui.screen.ReaderScreen
 import top.ntutn.kica.ui.state.LocalTitleTranslationService
-import top.ntutn.kica.ui.state.WindowLayout
-import top.ntutn.kica.ui.state.classifyWindow
 import top.ntutn.kica.ui.theme.KicaFluentTheme
-import top.ntutn.kica.ui.PlatformBackHandler
 
-private data class RootDestination(
-    val route: AppRoute,
-    val label: StringResource,
-    val icon: ImageVector,
-)
-
-private val rootDestinations = listOf(
-    RootDestination(AppRoute.Home, Res.string.home, Icons.Regular.Home),
-    RootDestination(AppRoute.Discover, Res.string.discover, Icons.Regular.Navigation),
-    RootDestination(AppRoute.Favorites, Res.string.favorites, Icons.Regular.Heart),
-    RootDestination(AppRoute.History, Res.string.history, Icons.Regular.History),
-    RootDestination(AppRoute.Downloads, Res.string.downloads, Icons.Regular.ArrowDownload),
-    RootDestination(AppRoute.Settings, Res.string.settings, Icons.Regular.Settings),
-)
-
+/** Rendering only: navigation and page lifetimes belong to the platform-owned root. */
 @Composable
-fun KicaApp(
-    picaRepository: PicaRepository,
-    libraryRepository: LibraryRepository,
-    downloadCoordinator: DownloadCoordinator,
-    platformServices: PlatformServices,
-    titleTranslationService: TitleTranslationService,
-) {
-    val session by picaRepository.session.collectAsState()
-    val settings by libraryRepository.settings().collectAsState(initial = top.ntutn.kica.model.AppSettings())
-    val scope = rememberCoroutineScope()
-    val tagResolver = remember(picaRepository, libraryRepository) {
-        ComicTagResolver(picaRepository, libraryRepository, scope)
-    }
-    var locked by remember { mutableStateOf(false) }
-    var backgroundSince by remember { mutableLongStateOf(0L) }
-    var lockInitialized by remember { mutableStateOf(false) }
-    val lockPasswordHash = settings.lockPasswordHash
-    val lockPatternHash = settings.lockPatternHash
-    val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Home) }
-    val pageHolder = rememberSaveableStateHolder()
-    val searchPages = remember { mutableMapOf<String, SearchPageState>() }
-    val readerSessions = remember { mutableMapOf<AppRoute.Reader, ReaderSessionMemory>() }
-    val retainedPages = remember { mutableSetOf<String>() }
-    LaunchedEffect(backStack.toList()) {
-        val active = backStack.map { it.toString() }.toSet()
-        (retainedPages - active).forEach { pageHolder.removeState(it) }
-        retainedPages.clear()
-        retainedPages.addAll(active)
-        searchPages.keys.retainAll(active)
-        readerSessions.keys.retainAll(backStack.filterIsInstance<AppRoute.Reader>().toSet())
-    }
-    val navigateBack = {
-        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-    }
+fun KicaApp(root: RootComponent) {
+    val state by root.state.collectAsState()
+    val slot by root.main.subscribeAsState()
+    val main = slot.child?.takeIf { it.configuration.sessionKey == state.sessionKey }?.instance
+    val services = root.services
+    val tagResolver = main?.session?.tagResolver
+    val sections = main?.sections?.subscribeAsState()?.value
+    val section = sections?.let { it.items[it.selectedIndex].instance }
+    val stack = section?.stack?.subscribeAsState()?.value
+    val reader = stack?.active?.instance?.route is AppRoute.Reader && !state.locked
 
-    PlatformBackHandler(
-        enabled = session != null && backStack.size > 1,
-        onBack = navigateBack,
-    )
-
-    LaunchedEffect(Unit) {
-        picaRepository.restoreSession()
-        downloadCoordinator.restore()
-    }
-    LaunchedEffect(settings.network) {
-        picaRepository.updateNetworkSettings(settings.network)
-        titleTranslationService.updateNetworkSettings(settings.network)
-    }
-    LaunchedEffect(settings.titleTranslationEnabled) {
-        if (settings.titleTranslationEnabled) {
-            runCatching { titleTranslationService.enable() }
-        } else {
-            titleTranslationService.disable()
-        }
-    }
-
-    val hasPassword = lockPasswordHash != null || lockPatternHash != null
-
-    PlatformLifecycleObserver(
-        onBackground = {
-            if (settings.lockEnabled && hasPassword) {
-                backgroundSince = Clock.System.now().toEpochMilliseconds()
-            }
-        },
-        onForeground = {
-            if (settings.lockEnabled && hasPassword) {
-                if (backgroundSince > 0L && Clock.System.now().toEpochMilliseconds() - backgroundSince >= 3_000L) {
-                    locked = true
-                }
-                backgroundSince = 0L
-            }
-        },
-    )
-
-    LaunchedEffect(settings.lockEnabled, lockPasswordHash, lockPatternHash) {
-        if (!lockInitialized && settings.lockEnabled && hasPassword) {
-            lockInitialized = true
-            locked = true
-        }
-        if (lockInitialized && (!settings.lockEnabled || !hasPassword)) {
-            locked = false
-        }
-    }
-
-    val readerActive = session != null && backStack.lastOrNull() is AppRoute.Reader
     CompositionLocalProvider(
-        LocalTitleTranslationService provides titleTranslationService,
+        LocalTitleTranslationService provides services.translation,
         LocalTagResolver provides tagResolver,
-        LocalTagLibrary provides libraryRepository,
-        LocalSearchPages provides searchPages,
-        LocalReaderSessions provides readerSessions,
+        LocalTagLibrary provides services.library,
     ) {
-        KicaFluentTheme(
-            preference = settings.theme,
-            forceDarkSystemBars = readerActive,
-        ) {
-        val loginFailed = stringResource(Res.string.login_failed)
-        Mica(Modifier.fillMaxSize()) {
-            val contentModifier = if (readerActive) {
-                Modifier.fillMaxSize()
-            } else {
-                Modifier
-                    .fillMaxSize()
-                    .safeDrawingPadding()
-            }
-            Box(
-                contentModifier,
-            ) {
-                if (locked && lockPasswordHash != null) {
-                    LockScreen(
-                        passwordHash = lockPasswordHash,
-                        onUnlock = { locked = false },
-                    )
-                } else if (locked && lockPatternHash != null) {
-                    PatternLockScreen(
-                        patternHash = lockPatternHash,
-                        onUnlock = { locked = false },
-                    )
-                } else {
-                if (session == null) {
-                    LoginScreen(
-                        onLogin = { email, password, onResult ->
-                            scope.launch {
-                                runCatching { picaRepository.login(email, password) }
-                                    .onSuccess { onResult(null) }
-                                    .onFailure { onResult(it.message ?: loginFailed) }
-                            }
-                        },
-                    )
-                } else {
-                    val randomComicsLoader = rememberRandomComicsLoader(
-                        repository = picaRepository,
-                        library = libraryRepository,
-                    )
-                    val route = backStack.last()
-                    val navigate: (AppRoute) -> Unit = { target ->
-                        if (target in rootDestinations.map { it.route }) {
-                            backStack.clear()
-                            backStack.addAll(rootNavigationStackFor(target))
-                        } else if (backStack.lastOrNull() != target) {
-                            backStack.add(target)
+        KicaFluentTheme(preference = state.settings.theme, forceDarkSystemBars = reader) {
+            Mica(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize()) {
+                // Key the UI saving domain by validated session identity, never by a token or route string.
+                key(state.sessionKey) {
+                    val unlockedUi = rememberSaveableStateHolder()
+                    when {
+                        state.restoring || state.loggingOut -> Box(Modifier.fillMaxSize()) { FluentProgressRing() }
+                        state.locked && state.settings.lockPasswordHash != null -> {
+                            PlatformBackHandler(true) { /* Never navigate behind the lock. */ }
+                            LockScreen(state.settings.lockPasswordHash!!, root::unlock)
                         }
-                    }
-                    val routeContent: @Composable () -> Unit = {
-                        pageHolder.SaveableStateProvider(route.toString()) {
-                            RouteContent(
-                                route = route,
-                                picaRepository = picaRepository,
-                                libraryRepository = libraryRepository,
-                                randomComicsLoader = randomComicsLoader,
-                                downloadCoordinator = downloadCoordinator,
-                                platformServices = platformServices,
-                                onNavigate = navigate,
-                                onBack = navigateBack,
-                                onLogout = {
-                                    scope.launch {
-                                        picaRepository.logout()
-                                        backStack.clear()
-                                        backStack.add(AppRoute.Home)
-                                    }
-                                },
-                            )
+                        state.locked && state.settings.lockPatternHash != null -> {
+                            PlatformBackHandler(true) { }
+                            PatternLockScreen(state.settings.lockPatternHash!!, root::unlock)
                         }
+                        state.sessionKey == null -> LoginScreen(state.authenticating, state.loginError, root::login)
+                        main != null -> unlockedUi.SaveableStateProvider("unlocked-main") {
+                            MainContent(main, root::logout)
+                        }
+                        else -> FluentProgressRing()
                     }
-                    if (route is AppRoute.Reader) {
-                        routeContent()
-                    } else {
-                        MainShell(
-                            route = route,
-                            onNavigate = navigate,
-                            content = routeContent,
-                        )
-                    }
+                }
+                if (!state.restoring && !state.locked) state.serviceError?.let { error ->
+                    ServiceErrorBanner(error, root::retryServices,
+                        Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(12.dp))
                 }
                 }
             }
-        }
         }
     }
 }
 
-internal fun rootNavigationStackFor(target: AppRoute): List<AppRoute> =
-    if (target == AppRoute.Home) listOf(AppRoute.Home) else listOf(AppRoute.Home, target)
-
 @Composable
-private fun MainShell(
-    route: AppRoute,
-    onNavigate: (AppRoute) -> Unit,
-    content: @Composable () -> Unit,
-) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val layout = classifyWindow(maxWidth.value.toInt())
-        val displayMode = when (layout) {
-            WindowLayout.PHONE -> NavigationDisplayMode.LeftCollapsed
-            WindowLayout.TABLET -> NavigationDisplayMode.LeftCompact
-            WindowLayout.DESKTOP -> NavigationDisplayMode.Left
+private fun MainContent(main: MainComponent, onLogout: () -> Unit) {
+    val sections by main.sections.subscribeAsState()
+    val section = sections.items[sections.selectedIndex].instance ?: return
+    val stack by section.stack.subscribeAsState()
+    val columnState = rememberSaveableStateHolder()
+    // Read the observed stack in this restart scope, not only inside Children: otherwise Compose
+    // may recompose the child content while leaving the root BackHandler's enabled flag stale.
+    val canGoBack = stack.backStack.isNotEmpty() || section.id != top.ntutn.kica.ui.navigation.SectionId.HOME
+    PlatformBackHandler(canGoBack, main::back)
+    columnState.SaveableStateProvider(section.id.name) {
+        // The Children host stays in one location when reader shell/full-screen presentation changes.
+        Children(stack = stack) { child ->
+            val page = child.instance
+            val render: @Composable () -> Unit = {
+                if (page.route is AppRoute.Reader) ReaderScreen(page, main::back)
+                else BrowseRouteContent(page, main::navigate, main::back, onLogout)
+            }
+            if (page.route is AppRoute.Reader) render()
+            else Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                MainShell(section.id, main::selectSection, render)
+            }
         }
-        val navigationState = rememberNavigationState(
-            initialExpanded = layout == WindowLayout.DESKTOP,
-        )
-        PlatformBackHandler(
-            enabled = layout != WindowLayout.DESKTOP && navigationState.expanded,
-            onBack = { navigationState.expanded = false },
-        )
-        val selectDestination: (AppRoute) -> Unit = { destination ->
-            onNavigate(destination)
-            if (layout != WindowLayout.DESKTOP) navigationState.expanded = false
-        }
-
-        NavigationView(
-            modifier = Modifier.fillMaxSize(),
-            displayMode = displayMode,
-            state = navigationState,
-            contentPadding = if (layout == WindowLayout.PHONE) {
-                PaddingValues(top = 48.dp)
-            } else {
-                PaddingValues()
-            },
-            title = {
-                Text(
-                    text = "Kica",
-                    style = FluentTheme.typography.subtitle,
-                )
-            },
-            menuItems = {
-                rootDestinations.dropLast(1).forEach { destination ->
-                    menuItem(
-                        selected = route == destination.route,
-                        onClick = { selectDestination(destination.route) },
-                        text = { Text(stringResource(destination.label)) },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        key = destination.route,
-                    )
-                }
-            },
-            footerItems = {
-                rootDestinations.lastOrNull()?.let { destination ->
-                    menuItem(
-                        selected = route == destination.route,
-                        onClick = { selectDestination(destination.route) },
-                        text = { Text(stringResource(destination.label)) },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        key = destination.route,
-                    )
-                }
-            },
-            pane = content,
-        )
     }
 }

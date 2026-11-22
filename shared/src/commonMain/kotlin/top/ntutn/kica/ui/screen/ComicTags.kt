@@ -39,7 +39,11 @@ internal fun ComicTags(
     var selected by remember(comicId) { mutableStateOf<String?>(null) }
     var selector by remember(comicId) { mutableStateOf(false) }
     var manage by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
+    val actions = checkNotNull(top.ntutn.kica.ui.store.LocalTagActions.current)
+    val action by actions.state.collectAsState()
+    var copyBusy by remember { mutableStateOf(false) }
+    val busy = copyBusy || action.busy
+    var seenVersion by remember { mutableIntStateOf(action.version) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var returnFocus by remember { mutableStateOf<FocusRequester?>(null) }
     val scope = rememberCoroutineScope()
@@ -52,6 +56,10 @@ internal fun ComicTags(
         selected = null
         returnFocus?.let { runCatching { it.requestFocus() } }
         Unit
+    }
+    LaunchedEffect(action.version, action.error) {
+        if (action.version > seenVersion) { seenVersion = action.version; feedback = success; closeMenu() }
+        if (action.error != null) feedback = failure
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -109,7 +117,7 @@ internal fun ComicTags(
                 Text(stringResource(Res.string.tags_search))
             }
             FluentButton(enabled = !busy, onClick = {
-                busy = true
+                copyBusy = true
                 scope.launch {
                     try {
                         feedback = if (platform.copyText(tag)) copied else copyFailed
@@ -118,24 +126,13 @@ internal fun ComicTags(
                         throw cancelled
                     } catch (_: Exception) {
                         feedback = copyFailed
-                    } finally { busy = false }
+                    } finally { copyBusy = false }
                 }
             }) { Text(stringResource(Res.string.tags_copy)) }
             FluentButton(enabled = !busy, onClick = {
-                busy = true
-                scope.launch {
-                    try {
-                        library.updateBlockedTags { current ->
-                            if (blocked) current.filterNot { tagKey(it) == tagKey(tag) }.toSet()
-                            else current + tag
-                        }
-                        feedback = success
-                        closeMenu()
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        feedback = failure
-                    } finally { busy = false }
+                actions.update { current ->
+                    if (blocked) current.filterNot { tagKey(it) == tagKey(tag) }.toSet()
+                    else current + tag
                 }
             }) { Text(stringResource(if (blocked) Res.string.tags_unblock else Res.string.tags_block)) }
             feedback?.let { Text(it) }

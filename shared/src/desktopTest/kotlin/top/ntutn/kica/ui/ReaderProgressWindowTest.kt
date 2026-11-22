@@ -1,7 +1,6 @@
 package top.ntutn.kica.ui
 
 import androidx.compose.ui.awt.ComposeWindow
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import java.awt.Color
 import java.awt.Robot
@@ -18,6 +17,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import org.junit.Assume.assumeTrue
@@ -31,9 +34,9 @@ import top.ntutn.kica.model.Episode
 import top.ntutn.kica.model.PageRef
 import top.ntutn.kica.model.ReaderMode
 import top.ntutn.kica.model.ReadingProgress
-import top.ntutn.kica.ui.screen.ReaderScreen
-import top.ntutn.kica.ui.screen.LocalReaderSessions
-import top.ntutn.kica.ui.screen.ReaderSessionMemory
+import top.ntutn.kica.ui.screen.ReaderStoreScreen
+import top.ntutn.kica.ui.screen.ReaderStore
+import top.ntutn.kica.ui.navigation.SessionProgressCoordinator
 import top.ntutn.kica.ui.screen.ReaderEntryState
 import top.ntutn.kica.ui.theme.KicaFluentTheme
 
@@ -122,7 +125,6 @@ class ReaderProgressWindowTest {
             fixture.awaitPage("e2", 0)
             onEdt { fixture.mounted.value = false }
             fixture.robot.delay(200)
-            fixture.latest.set(null)
             onEdt { fixture.mounted.value = true }
             fixture.awaitPage("e2", 0)
             assertEquals(1, fixture.readRequests.get(), "Unlock must not re-read or re-prompt")
@@ -140,9 +142,8 @@ class ReaderProgressWindowTest {
             assertEquals(3, runBlocking { fixture.memory.readingProgress("comic", "e2")?.pageIndex })
             onEdt { fixture.mounted.value = false }
             fixture.robot.delay(200)
-            fixture.latest.set(null)
             onEdt { fixture.mounted.value = true }
-            await("unlock resumes pending target") { fixture.blockedRequests.get() == 2 }
+            assertEquals(1, fixture.blockedRequests.get(), "Unlock must retain the in-flight chapter read")
             assertEquals(1, fixture.readRequests.get())
             fixture.chapterGate.complete(Unit)
             fixture.awaitPage("e2", 0)
@@ -177,7 +178,9 @@ class ReaderProgressWindowTest {
         val blockedEpisode = AtomicReference<String?>()
         val blockedRequests = AtomicInteger()
         val chapterGate = CompletableDeferred<Unit>()
-        private val sessions = mutableMapOf<AppRoute.Reader, ReaderSessionMemory>()
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        private val writer: SessionProgressCoordinator
+        private val store: ReaderStore
         private val saves = AtomicInteger()
         val memory = InMemoryLibraryRepository()
         val window: ComposeWindow
@@ -228,6 +231,8 @@ class ReaderProgressWindowTest {
                 "getSaepAvailable" -> false
                 else -> error("Unexpected platform call: $name")
             } }
+            writer = SessionProgressCoordinator(scope, library)
+            store = ReaderStore("fixture", "comic", "e1", repository, library, writer, ReaderTestFiles)
             window = onEdt {
                 ComposeWindow().apply {
                     title = "Kica progress validation — $mode"
@@ -236,9 +241,7 @@ class ReaderProgressWindowTest {
                     setContent {
                         KicaFluentTheme {
                             PlatformBackHandler(true) { back.incrementAndGet() }
-                            CompositionLocalProvider(LocalReaderSessions provides sessions) {
-                                if (mounted.value) ReaderScreen("comic", "e1", repository, library, platform) { back.incrementAndGet() }
-                            }
+                            if (mounted.value) ReaderStoreScreen(store, platform) { back.incrementAndGet() }
                         }
                     }
                     isVisible = true
@@ -251,7 +254,7 @@ class ReaderProgressWindowTest {
         fun awaitDialog() {
             await("progress read and window focus") {
                 readRequests.get() > 0 && onEdt {
-                    sessions.values.singleOrNull()?.entry?.state is ReaderEntryState.Choice &&
+                    store.state.value.entry is ReaderEntryState.Choice &&
                         (window.isFocused || window.ownedWindows.any { it.isShowing && it.isFocused })
                 }
             }
@@ -290,7 +293,10 @@ class ReaderProgressWindowTest {
         }
 
         override fun close() {
+            runBlocking { writer.close() }
             onEdt {
+                store.onDestroy()
+                scope.cancel()
                 window.ownedWindows.forEach { it.dispose() }
                 window.dispose()
             }

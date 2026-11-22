@@ -15,10 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.collectAsState
+import com.arkivanov.essenty.instancekeeper.getOrCreate
+import top.ntutn.kica.ui.navigation.PageComponent
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,10 +31,7 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
 import org.jetbrains.compose.resources.stringResource
-import top.ntutn.kica.data.LibraryRepository
-import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
-import top.ntutn.kica.model.Episode
 import top.ntutn.kica.model.AppRoute
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.back
@@ -53,31 +51,47 @@ import top.ntutn.kica.ui.component.FluentProgressRing
 import top.ntutn.kica.ui.component.FluentTextButton
 
 @Composable
-internal fun ReaderScreen(
-    comicId: String,
-    episodeId: String,
-    repository: PicaRepository,
-    library: LibraryRepository,
-    platformServices: PlatformServices,
-    onBack: () -> Unit,
-) = key(comicId, episodeId, library) {
-    val retainedSessions = LocalReaderSessions.current
-    val memory = remember {
-        retainedSessions?.getOrPut(AppRoute.Reader(comicId, episodeId)) { ReaderSessionMemory() } ?: ReaderSessionMemory()
+internal fun ReaderScreen(page: PageComponent, onBack: () -> Unit) {
+    val store = remember(page) {
+        val route = page.route as AppRoute.Reader
+        val snapshot = page.stateKeeper.consume("reader", ReaderSnapshot.serializer())
+        val retained = page.instanceKeeper.getOrCreate("reader-store") {
+            ReaderStore(page.entryId, route.comicId, route.episodeId,
+                page.services.pica, page.services.library, page.session.progressWriter,
+                page.services.platform.fileLocationProvider, snapshot)
+        }
+        if (!page.stateKeeper.isRegistered("reader")) {
+            page.stateKeeper.register("reader", ReaderSnapshot.serializer()) { retained.snapshot() }
+        }
+        retained
     }
-    val entry = memory.entry
-    var retry by remember { mutableIntStateOf(0) }
-    val cancel = { if (entry.cancel()) onBack() }
-    DisposableEffect(entry) { onDispose { entry.interruptRead() } }
-    LaunchedEffect(entry, retry) { entry.readProgress { library.readingProgress(comicId, episodeId) } }
-    val episodes by produceState<List<Episode>>(emptyList(), comicId) {
-        value = runCatching { repository.episodes(comicId) }.getOrDefault(emptyList())
+    ReaderStoreScreen(store, page.services.platform, onBack)
+}
+
+/** UI shell is intentionally rebound on every composition/host recreation. */
+@Composable
+internal fun ReaderStoreScreen(store: ReaderStore, platformServices: PlatformServices, onBack: () -> Unit) {
+    val ui by store.state.collectAsState()
+    val token = remember(store) { Any() }
+    var attached by remember(store, token) { mutableStateOf(false) }
+    DisposableEffect(store, token) {
+        store.bind(token)
+        store.ensureLoaded()
+        attached = true
+        onDispose { store.unbind(token) }
     }
-    when (val state = entry.state) {
-        is ReaderEntryState.Ready -> ReaderContent(
-            comicId, memory.episodeId ?: episodeId, repository, library, platformServices,
-            memory.position ?: state.start, episodes, memory, cancel,
-        )
+    // Bind advances the layout generation. Never mount a retained Ready layout using the
+    // pre-effect snapshot: its initial positioned-page callback would necessarily be stale.
+    // collectAsState may deliver the binding update a frame after the local attachment flag.
+    if (!attached || !store.isBound(token) || ui.layoutGeneration != store.state.value.layoutGeneration) {
+        Box(Modifier.fillMaxSize().background(FluentTheme.colors.background.solid.base), contentAlignment = Alignment.Center) {
+            FluentProgressRing()
+        }
+        return
+    }
+    val cancel = { if (store.cancel()) onBack() }
+    when (val state = ui.entry) {
+        is ReaderEntryState.Ready -> ReaderContent(store, ui, token, platformServices, cancel)
         ReaderEntryState.Cancelled -> Unit
         else -> {
             PlatformBackHandler(true, cancel)
@@ -90,17 +104,17 @@ internal fun ReaderScreen(
                 } else if (state == ReaderEntryState.Failed) {
                     Column(Modifier.align(Alignment.Center).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(stringResource(Res.string.reader_progress_failed))
-                        FluentPrimaryButton({ retry++ }) { Text(stringResource(Res.string.retry)) }
+                        FluentPrimaryButton(store::retryEntry) { Text(stringResource(Res.string.retry)) }
                         FluentTextButton(cancel) { Text(stringResource(Res.string.cancel)) }
                     }
                 }
             }
             if (state is ReaderEntryState.Choice) {
                 ReaderProgressDialog(
-                    title = episodes.firstOrNull { it.id == episodeId }?.title ?: episodeId,
+                    title = ui.episodes.firstOrNull { it.id == ui.episodeId }?.title ?: ui.episodeId,
                     page = state.progress.pageIndex.toLong() + 1,
-                    onContinue = { entry.choose(true) },
-                    onStartOver = { entry.choose(false) },
+                    onContinue = { store.choose(true) },
+                    onStartOver = { store.choose(false) },
                     onCancel = cancel,
                 )
             }

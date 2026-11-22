@@ -32,11 +32,21 @@ internal class AndroidCredentialStore(context: Context) : CredentialStore {
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val ciphertext = cipher.doFinal(token.encodeToByteArray())
         val payload = byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + ciphertext
-        preferences.edit().putString(TOKEN, Base64.encodeToString(payload, Base64.NO_WRAP)).apply()
+        preferences.edit()
+            .putString(TOKEN, Base64.encodeToString(payload, Base64.NO_WRAP))
+            .putString(SESSION_ID, java.util.UUID.randomUUID().toString())
+            .apply()
     }
 
     override suspend fun clearToken() {
-        preferences.edit().remove(TOKEN).apply()
+        preferences.edit().remove(TOKEN).remove(SESSION_ID).apply()
+    }
+
+    override suspend fun readSessionId(): String? {
+        if (!preferences.contains(TOKEN)) return null
+        return preferences.getString(SESSION_ID, null) ?: java.util.UUID.randomUUID().toString().also {
+            preferences.edit().putString(SESSION_ID, it).apply()
+        }
     }
 
     private fun secretKey(): SecretKey {
@@ -60,6 +70,7 @@ internal class AndroidCredentialStore(context: Context) : CredentialStore {
         const val KEYSTORE = "AndroidKeyStore"
         const val KEY_ALIAS = "top.ntutn.kica.session"
         const val TOKEN = "token"
+        const val SESSION_ID = "navigation-session-id"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }

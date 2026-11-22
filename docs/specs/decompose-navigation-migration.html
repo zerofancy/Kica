@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kica · Decompose 全量导航与状态保留迁移 Spec</title>
+  <style>
+    :root { color-scheme:light; --ink:#18263a; --muted:#52627a; --line:#dce4ee; --accent:#285ac8; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f3f6fb; color:var(--ink); font:16px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1180px; margin:36px auto; padding:0 24px 60px; }
+    header { padding:36px; background:#19345c; border-radius:20px; color:white; }
+    header p,header a { color:#deebff; }
+    h1 { font-size:30px; line-height:1.45; margin:12px 0; }
+    h2 { font-size:23px; margin:0 0 18px; }
+    h3 { font-size:18px; margin:22px 0 10px; }
+    section { background:white; border:1px solid var(--line); border-radius:16px; margin-top:22px; padding:28px 32px; }
+    p { margin:10px 0; } li { margin:6px 0; }
+    a { color:var(--accent); text-underline-offset:3px; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:20px; }
+    .badge { display:inline-block; font-size:13px; padding:3px 12px; border-radius:30px; background:#ffffff20; }
+    .note { padding:14px 18px; background:#edf3ff; border-left:4px solid var(--accent); border-radius:5px; }
+    .warn { background:#fff6e7; border-left-color:#b86a00; }
+    .meta { color:var(--muted); font-size:14px; }
+    .table-wrap { overflow-x:auto; scrollbar-width:auto; }
+    table { width:100%; border-collapse:collapse; margin:14px 0; font-size:14px; min-width:660px; }
+    th,td { border-bottom:1px solid var(--line); padding:11px; text-align:left; vertical-align:top; }
+    th { background:#f1f5fb; }
+    code { font-size:.9em; overflow-wrap:anywhere; }
+    pre { overflow-x:auto; scrollbar-width:auto; padding:18px; border-radius:8px; background:#f1f5fb; line-height:1.6; }
+    footer { color:var(--muted); padding:22px 4px; font-size:14px; }
+    @media(max-width:700px) { main { margin:16px auto; padding:0 12px 30px; } header,section { padding:22px; } h1 { font-size:25px; } }
+    @media print { body { background:white; font-size:10pt; } main { max-width:none; margin:0; padding:0; } header { background:white; color:var(--ink); padding:12px 0; } header p,header a { color:var(--muted); } section { border-radius:0; padding:18px 0; } nav { display:none; } .table-wrap,pre { overflow:visible; } table { min-width:0; } tr { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="badge">SPEC · v1.1 · 全量实现完成 · 本轮回归通过</span>
+    <h1>Decompose 全量导航与状态保留迁移</h1>
+    <p>一个版本内完成 Android / Desktop 全部应用内页面的组件化、独立栏目栈、状态保留、返回分发及恢复接线；不以只迁移导航壳或保留长期双轨实现作为完成。</p>
+    <p>2026-11-22 · 技术路线及状态规则已由用户选定 · 实际测试结果与未验范围见<a href="decompose-migration-validation.md">实施与验证记录</a>，本文仍作为行为验收规格。</p>
+    <nav aria-label="文档导航"><a href="#scope">范围</a><a href="#rules">状态规则</a><a href="#architecture">组件架构</a><a href="#pages">页面清单</a><a href="#back">返回</a><a href="#restore">恢复</a><a href="#migration">迁移清理</a><a href="#acceptance">验收</a></nav>
+  </header>
+
+  <section id="scope">
+    <h2>01 / 决策、范围与完成定义</h2>
+    <div class="note"><strong>规范优先级：</strong>本文取代<a href="../research/navigation-backstack-comparison.md">前期对比方案</a>中“优先试点 Navigation 3、逐步选择路线”的建议。正式路线为 Decompose；工程内部可分步实现，但必须一次完整交付，不能以试点通过代替全量完成。</div>
+    <ul>
+      <li><strong>MUST：</strong>迁移六个主栏目 Home、Discover、Favorites、History、Downloads、Settings，以及 RandomComics、Search、Detail、Reader；包含登录、恢复中、锁屏覆盖和主会话边界。</li>
+      <li><strong>MUST：</strong>页面业务状态、加载任务、输入/筛选/分页、滚动、阅读器状态及跨页面局部更新纳入明确所有权；Android 与 Desktop 使用同一导航语义。</li>
+      <li><strong>MUST：</strong>Android AI 操作选项继续采用独立 AiOperationOptionsActivity。SAEP 协议仅接受以 Activity 为单位设置策略，因此不得将此入口合并到 MainActivity 的 Decompose 页面、弹窗或栏目栈。Decompose 仅可用于该独立 Activity 内部的状态管理，不替代 Activity 安全边界；系统文件选择器、权限框仍归平台管理。</li>
+      <li><strong>MUST NOT：</strong>迁移结束后仍由旧 backStack、根级 SearchPageState / ReaderSessionMemory 状态表决定业务页面存活，或双写两套导航状态。</li>
+      <li><strong>不在本次：</strong>Web/iOS、桌面退出后恢复整栈、深链接新能力、双栏导航新布局、预测返回交互动画、MVIKotlin/新 DI 框架、发布软件包、账户数据库重设计。</li>
+      <li>既有阅读进度、标签交互、桌面快捷键、下载、翻译、锁屏和文件共享安全不得退化；允许为组件化重构内部实现，不改变已有业务含义。</li>
+    </ul>
+    <p class="meta">迁移前现状见<a href="../research/navigation-backstack-comparison.md">前期调研</a>；迁移后实现入口为<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/navigation/RootComponent.kt">RootComponent</a>与<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/navigation/MainComponent.kt">MainComponent</a>，保留<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/model/Models.kt">AppRoute</a>作为目的地 DTO，不再作为页面唯一身份。</p>
+  </section>
+
+  <section id="rules">
+    <h2>02 / 状态保留契约</h2>
+    <p><strong>核心原则：页面仍在组件树/栏目栈内，保留业务状态与 UI 恢复状态；页面真正出栈就释放。页面级别和路由参数相同与否，不决定保留。</strong></p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID / 操作</th><th>必须发生</th><th>不能发生</th></tr></thead>
+      <tbody>
+        <tr><td>R01 · 列表 → 详情 → 返回</td><td>原列表结果、已加载页、筛选、输入和滚动锚点恢复。</td><td>重置第一页、重新初始加载、成功内容闪回整页 Loading。</td></tr>
+        <tr><td>R02 · 详情 → 阅读器 → 返回</td><td>恢复同一详情组件；定向更新阅读进度。</td><td>无故重取全部详情/章节、丢详情位置。</td></tr>
+        <tr><td>R03 · 栏目 A → B → A</td><td>恢复 A 的完整子栈与各页状态；再次点击当前栏目无副作用。</td><td>隐式清栈、回栏目根页或刷新。</td></tr>
+        <tr><td>R04 · 弹窗、抽屉、菜单</td><td>只影响临时交互；关闭不重建底层页。</td><td>关闭弹层同时 pop 页面。</td></tr>
+        <tr><td>R05 · 锁屏、切后台、布局变化</td><td>同进程下保留导航与业务对象；解锁不重复进入阅读进度选择。</td><td>锁屏当作登出、重建页面组件；横竖屏/窗口宽度作为组件 key。</td></tr>
+        <tr><td>R06 · pop 当前页</td><td>当前页销毁，恢复下层；重开相同参数是新 entry。</td><td>从历史页面对象表复活已出栈页面的临时状态。</td></tr>
+        <tr><td>R07 · 显式刷新/改变查询</td><td>保留组件身份，按请求策略重置相关数据。</td><td>连带清理无关栏目或其他页面。</td></tr>
+        <tr><td>R08 · 登出/换账号</td><td>释放旧 Main 树、内存数据投影与任务，拒绝旧异步结果。</td><td>旧账号页面或结果进入新会话。</td></tr>
+        <tr><td>R09 · Android 配置重建</td><td>通过 InstanceKeeper 保留业务 store；重新绑定新 UI/平台句柄。</td><td>保留 Activity/Window/FocusRequester，或误当成普通冷启动。</td></tr>
+        <tr><td>R10 · 系统进程回收后恢复</td><td>恢复有效导航及小型快照；按需重建数据，允许必要请求。</td><td>承诺内存对象复活、完整分页数据放入 Bundle。</td></tr>
+      </tbody>
+    </table></div>
+    <p>“不刷新”指纯导航事件不触发页面主数据重载，不禁止本地 Flow 更新、明确的业务修改或已有屏蔽规则触发的必要元数据核验。验收时必须区分这些请求来源。</p>
+  </section>
+
+  <section id="architecture">
+    <h2>03 / 组件树与导航所有权</h2>
+    <pre>平台宿主（Android Activity / Desktop Window）
+└── RootComponent：启动恢复、认证、会话 epoch、锁屏控制
+    ├── Restoring / Login（互斥，不是主栈历史）
+    └── MainComponent（每个已认证会话一个）
+        ├── SessionData：随机推荐共享数据、实体局部变更投影
+        └── ChildPages&lt;SectionConfig, SectionComponent&gt;：仅含已访问栏目
+            ├── Home       ── ChildStack&lt;PageConfig, PageChild&gt;
+            ├── Discover   ── ChildStack&lt;PageConfig, PageChild&gt;
+            ├── Favorites  ── ChildStack&lt;PageConfig, PageChild&gt;
+            ├── History    ── ChildStack&lt;PageConfig, PageChild&gt;
+            ├── Downloads  ── ChildStack&lt;PageConfig, PageChild&gt;
+            └── Settings   ── ChildStack&lt;PageConfig, PageChild&gt;
+独立 Android AI Activity ── AiOperationOptionsComponent（不共享主栈）</pre>
+    <h3>3.1 栏目容器：明确禁止默认销毁策略</h3>
+    <ul>
+      <li>Main 使用 <code>PagesNavigation</code> + <code>childPages</code>；初始仅 Home，首次选择新栏目时追加并选中；栏目顺序用稳定 SectionId 定位，不以可变数组下标当身份。</li>
+      <li><code>pageStatus</code> 必须显式指定：选中栏目 <code>RESUMED</code>，其他已访问栏目 <code>CREATED</code>；父生命周期进一步限制实际状态。禁止使用默认“相邻保留、远端 DESTROYED”的行为。</li>
+      <li>每个 Section 只有一个非空 ChildStack，根页固定；其栈顶随栏目活跃，非栈顶停止但保留。未访问栏目不创建组件、不请求数据。</li>
+      <li>首次加载由业务 store 第一次活跃时的幂等 <code>ensureLoaded()</code> 触发，不在组件工厂或反序列化期间立即为全栈发请求。</li>
+      <li>UI 只渲染选中栏目，不引入可滑动栏目分页器；栏目变化通过 sidebar 操作提交命令。</li>
+      <li>已访问但不活跃的栏目，其 UI 可退出组合；UI 保存必须另行接线，不能把组件没销毁误当作普通 remember 没销毁。</li>
+    </ul>
+    <h3>3.2 PageConfig、EntryId 与命令</h3>
+    <ul>
+      <li>采用可序列化 <code>PageConfig(entryId, destination)</code>；Destination 为封闭类型，覆盖全部既有路由。entryId 在一次新进入时生成，保存/恢复沿用，不能由路由 toString、漫画 ID、Compose 调用次数或当前索引推导。</li>
+      <li>相同参数允许出现多个 entry：<code>详情 A → 标签搜索 → 详情 A</code> 不冲突；同一漫画的不同 entry UI 状态独立，实体修改共享。</li>
+      <li><code>selectSection(id)</code> 只切换栏目；<code>open(destination)</code> 在当前栏目 push；<code>back()</code> 按第 06 节；<code>logout()</code> 替换认证边界。命令主线程串行处理。</li>
+      <li>快速连点同一个可导航控件只提交一次进入意图；禁止用“栈中存在该业务 ID”全局去重，避免破坏合法重复 entry。</li>
+      <li>AppRoute 如保留，仅可作为无状态业务目的地或适配 DTO；不得再充当唯一页面身份和第二份导航容器。</li>
+      <li>Children/ChildPages 的 key、StateKeeper key、InstanceKeeper key 必须在父作用域内唯一且恢复稳定；不启用全局 duplicateConfigurations 开关规避身份设计。</li>
+    </ul>
+    <h3>3.3 Component / Store / UI 边界</h3>
+    <p>Component 暴露只读 <code>StateFlow&lt;UiState&gt;</code> 和事件方法；业务 store 实现 InstanceKeeper.Instance，并负责分页、任务、generation 与清理。StateKeeper 仅保存可恢复的小型 Snapshot。UI 接收 component/state，不再拿 Repository 发页面主数据请求。</p>
+    <p>允许 UI 保留焦点、动画、手势、布局测量、与真实可见性绑定的预加载及其 effect；所有需要跨页面离屏保留的业务状态必须移出普通 remember。错误保存为可解释的数据，文案由 UI 资源层渲染，避免语言/主题变化重建 store。</p>
+    <p>InstanceKeeper 中的 store、SessionData 和写入协调器不能捕获可重建的组件外壳或其导航 lambda；组件重建后重新绑定输出/平台回调并注销旧绑定。纯业务状态可保留，导航与原生句柄必须指向当前宿主。</p>
+  </section>
+
+  <section id="pages">
+    <h2>04 / 全页面状态迁移清单</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>组件</th><th>内存保留的业务状态</th><th>Snapshot / UI 恢复</th><th>变化与加载规则</th></tr></thead>
+      <tbody>
+        <tr><td>Home</td><td>推荐结果、初始加载/错误、刷新代次。</td><td>列表锚点与偏移。</td><td>首次加载缓存优先且最多一次初始校验；普通返回不重跑推荐。</td></tr>
+        <tr><td>Discover</td><td>分类、各已访问榜单周期的结果/加载状态；当前周期。</td><td>周期、已提交筛选、每周期锚点。</td><td>首次选周期按需加载；返回不重置为 24 小时榜。</td></tr>
+        <tr><td>Favorites</td><td>原始分页、totalPages、加载页、分页错误/请求状态。</td><td>页范围提示、锚点；只恢复提示而非序列化结果全集。</td><td>返回不清页；取消收藏按 ID 移除，新增收藏标 dirty，按第 07 节定向处理。</td></tr>
+        <tr><td>History</td><td>最近一次本地结果、可见数量、筛选投影。</td><td>visibleLimit、showHidden、锚点。</td><td>订阅本地历史；再次订阅保留旧值，不能先发 emptyList 清屏。</td></tr>
+        <tr><td>Downloads</td><td>任务投影、可见数量、筛选；操作反馈。</td><td>showHidden、visibleLimit、锚点。</td><td>应用级下载协调器不随页面销毁；暂停/重试功能保持。</td></tr>
+        <tr><td>Settings</td><td>保存中状态、模型/导出等操作状态；设置数据投影。</td><td>主滚动和横向选项位置；未提交代理 host/port 草稿与 dirty 标记。</td><td>本地设置更新不覆盖 dirty 草稿；口令/锁图案不入快照。</td></tr>
+        <tr><td>RandomComics</td><td>会话共享随机结果，页面自身不重复随机抽取。</td><td>entry 独立锚点。</td><td>Home 与随机页共用 SessionData；显式换一批才更新共享结果，回退不刷新。</td></tr>
+        <tr><td>Search</td><td>输入草稿、已提交 criteria、fromTag、结果、分页与请求代次。</td><td>草稿与 criteria 分开保存，类别、来源、页范围、锚点。</td><td>组件管理去重；输入未提交不得偷偷改变查询；移除根级 SearchPageState Map。</td></tr>
+        <tr><td>Detail</td><td>详情、章节、收藏/点赞业务状态与操作进行中状态。</td><td>滚动位置、必要展开状态。</td><td>阅读器返回只更新进度投影；相同漫画其他 entry 接收已确认实体变化。</td></tr>
+        <tr><td>Reader</td><td>入口状态机、已确认进入决定、当前章节/页列表、模式/适配、跨章意图、加载错误。</td><td>已就绪的章节、实际阅读页、模式、适配；有限进入状态；具体见第 05 节。</td><td>加载/进度/离线回退移入组件；UI 保留键盘、焦点、手势和渲染。</td></tr>
+        <tr><td>Login / Lock</td><td>认证/解锁事件归边界组件，防重入。</td><td>仅允许非敏感登录草稿；密码、口令、图案、token 不保存；锁屏输入不恢复。</td><td>锁屏不销毁 Main；认证失败不进入主树。</td></tr>
+        <tr><td>AI 操作选项</td><td>设置投影、保存/策略同步状态。</td><td>独立宿主滚动状态。</td><td>保持 Activity 启动、SAEP 策略版本更新与“本页禁 Agent 操作”规则。</td></tr>
+      </tbody>
+    </table></div>
+    <p>所有列表保留<strong>未按屏蔽规则破坏性裁剪的原始结果</strong>，规则变化重新计算投影，不重新拉整份列表；未知标签核验仍复用既有解析/缓存逻辑。标题翻译保留应用级服务，只在 UI 可见时做必要订阅，不因页面返回重启模型。</p>
+    <p>业务确认对话框的临时输入可在当前显示期间存在，但通用菜单、帮助框、toast、焦点对象、按钮 pressed 状态不作为跨离屏恢复契约。离开栏目、锁屏或 UI 重建时关闭这些临时交互；业务入口选择不是普通临时菜单，按下一节处理。</p>
+  </section>
+
+  <section id="reader">
+    <h2>05 / 阅读器专项：不得因迁移改写阅读语义</h2>
+    <p>兼容既有<a href="reader-progress-choice.html">阅读进度选择 spec</a>与<a href="desktop-reader-keyboard.html">桌面阅读器键盘 spec</a>；本次只改变所有权与生命周期。</p>
+    <ul>
+      <li>新 Reader entry 只读取所选目标章节进度；超过第一页才询问，第一页/无记录直接就绪；“从头开始”只指该章节，保留既有模式规则。</li>
+      <li>同一 entry 的 Checking / Failed / Choice / Ready 为组件状态；普通离屏、锁屏、配置重建后不重复询问已确认选择。Choice 尚未确认时恢复同一选择流程，不擅自继续。</li>
+      <li>进程重建：已 Ready 的 entry 从快照中的当前章节/实际页恢复，不当作外部新进入；未确认 entry 重新读取进度并展示必要选择。快照缺失则走新进入安全流程，不写入虚构进度。</li>
+      <li>内部跨章不 push 新页面、不再次触发入口选择；下一章从开头、上一章从末尾，保持原行为。未完成跳转的目标和末尾意图在内存中保留，但不作为已读进度持久化。</li>
+      <li>页列表按当前章节加载；同 entry 返回/解锁不重拉；新章节、显式重试才发请求。网络失败仍走已有 downloadedPages 离线回退，不误删下载任务。</li>
+      <li>页面布局只有在真正显示有效页后才报告进度；报告携带 entryId、章节和 layoutGeneration，过期布局、模式切换前回调、取消进入、已销毁页面均不能写进度。</li>
+      <li>进度和历史写入以<strong>会话级串行写入协调器</strong>承接，不再使用随组合销毁而取消的 writer。已接受的最后有效页应在 pop/锁屏/正常窗口关闭边界提交；按顺序写入，旧慢请求不得覆盖新进度。</li>
+      <li>页面 pop 取消页面读任务，但不能取消已接收的有效进度写入；登出先停止新报告，再有界排空旧会话写入或明确记录失败，随后关闭会话。不能让旧写入通知新账号 UI，也不承诺强杀进程时未落盘队列不丢失。</li>
+      <li>复制/保存图片的原生对话框使用当前宿主句柄；组件不能持有旧 Activity/Window。UI 重建后失效结果不再投递旧 entry，任务是否完成由平台结果确定。</li>
+      <li>Esc/键盘帮助/上下文菜单/章节跳转/按键去重、失焦释放保持；最小化、锁屏或离开阅读器时清 held keys 并停预加载，恢复不产生幽灵翻页。</li>
+    </ul>
+    <p class="meta">当前迁移重点：<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/screen/ReaderEntrySession.kt">ReaderEntrySession</a>、<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/screen/ReaderScreens.kt#L89-L184">ReaderContent 业务加载及进度回调</a>、<a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/navigation/SessionProgressCoordinator.kt">SessionProgressCoordinator（替代旧 ReaderProgressWriter）</a>。可复用纯逻辑算法及测试，不保留旧根级会话 Map。</p>
+  </section>
+
+  <section id="back">
+    <h2>06 / 导航与返回：唯一分发链</h2>
+    <ol>
+      <li>平台原生模态交互先由平台消费；锁屏/认证边界不得放行业务导航返回。</li>
+      <li>普通业务 UI：关闭最后显示、可返回的菜单/弹窗/阅读器临时交互。</li>
+      <li>关闭展开的导航抽屉。</li>
+      <li>当前栏目栈深度大于 1：只 pop 一页。</li>
+      <li>当前栏目在根页且非 Home：选择 Home，恢复 Home 原有子栈，<strong>不隐式清除 Home 深层页面</strong>。</li>
+      <li>Home 栈根页无临时交互：Android 不拦截系统默认退出；Desktop Esc 不关闭应用。</li>
+    </ol>
+    <p>栏目选择历史不是回退栈；Home 根页返回不会重新跳到上次栏目。阅读器 UI 返回按钮与普通页面 UI 返回按钮调用同一 back 意图，阅读器未确认入口的取消逻辑先经入口状态机保证只出栈一次。</p>
+    <ul>
+      <li>继续使用项目 <code>PlatformBackHandler</code> 作为系统返回与 Esc 的平台适配。所有 ChildStack / ChildPages 禁止自动处理返回（<code>handleBackButton=false</code>），由活跃 Main/Section 的统一 back 方法执行命令。</li>
+      <li>页面临时交互可保留局部 PlatformBackHandler，但只能登记当前可见最上层交互；不能同时调用 pop，不能由隐藏栏目拦截；返回消费优先级必须测试而非仅依赖假定的注册顺序。</li>
+      <li>UI 与主树之间保持单一事件路径；系统一次返回、单次 Esc 按下最多消费一层，长按/键重复保持已有去重。</li>
+      <li>锁屏默认消费返回且只停留在锁屏，不修改底层栈；锁屏控制层限制 Main 生命周期/可交互状态，解锁仅恢复，不能靠移除 Main 组件实现。</li>
+      <li>阅读器全屏通过同一个 section/entry 渲染宿主决定壳层可见性；不要因读者全屏把 Children 放入另一棵组合子树而丢失原保存域。</li>
+    </ul>
+  </section>
+
+  <section id="data">
+    <h2>07 / 请求、跨页面更新与任务生命周期</h2>
+    <h3>7.1 请求状态机</h3>
+    <ul>
+      <li><code>ensureLoaded()</code>：未加载且无运行中任务才启动；已有 Data/Error 不因 resumed 重试；Error 由用户重试或明确业务事件处理。读到缓存后只在初始加载周期内做一次必要远程校验。</li>
+      <li>普通 push/pop、切栏目、恢复组合、解锁和 resumed 均不是 refresh。此次不引入 TTL 自动返回刷新。</li>
+      <li>刷新可替换第一页、重置分页；有旧数据时维持内容与独立 refreshing/error，不先清屏。新查询成功后定位顶部；显式刷新成功后允许定位顶部，失败保留原结果与位置。</li>
+      <li>分页同一页只允许一个请求；刷新/查询条件变化增加 generation，取消或忽略旧请求；必须在完成、取消、失败路径清理 busy，避免永久 loadingMore。</li>
+      <li>捕获异常必须重新抛出 CancellationException；禁止把取消转换成用户错误、离线回退或缓存写入成功。</li>
+    </ul>
+    <h3>7.2 局部数据一致性</h3>
+    <p>新增会话级 <code>SessionData</code>，用可重放的状态投影/版本号承接按漫画 ID 的已确认收藏、点赞、进度和标签变更，不能只用离屏期间会丢事件的无重放一次性事件流。它不替代持久化 Repository，也不是第二个导航状态表。</p>
+    <ul>
+      <li>收藏/点赞：操作成功后同步更新同漫画各详情 entry；失败回滚对应乐观修改，不能用旧请求覆盖新已确认结果。</li>
+      <li>收藏集合：取消已存在漫画直接移除；新增但位置未知时标记集合 dirty，下一次可见只做一次有原因的静默集合校验，合并/去重并保持可用锚点，不闪回全页 Loading。属于业务变更请求，不是纯返回请求。</li>
+      <li>历史/下载/设置：可暂停不活跃页的持续收集，但保留最近值；重新可见接收最新数据，不先置为空。不活跃页遗漏的实体变化通过版本投影补齐。</li>
+      <li>屏蔽规则与翻译设置沿用已有语义，重新计算可见投影而非破坏原始列表。标签补查与操作请求独立计数，避免误判为页面主数据重载。</li>
+    </ul>
+    <h3>7.3 生命周期表</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>状态</th><th>允许继续</th><th>必须停止/禁止</th></tr></thead>
+      <tbody>
+        <tr><td>当前可见且宿主前台</td><td>页面有限请求、可见订阅、用户操作、必要预加载。</td><td>重复初始请求。</td></tr>
+        <tr><td>同栈后台 / 非选中栏目 / 锁屏</td><td>已发起的有限数据请求或业务提交完成，结果写回保留 store。</td><td>UI 键盘输入、持续预加载、新的可见性驱动补查；不从工厂批量拉取隐藏页。</td></tr>
+        <tr><td>entry 销毁</td><td>已接受的进度/持久化写入交给会话协调器完成。</td><td>取消页面任务、解除订阅/回调，拒绝页面新状态写入。</td></tr>
+        <tr><td>会话失效 / 宿主最终关闭</td><td>有界收尾应用服务与已接受写入。</td><td>销毁会话树/instance stores；清旧投影；禁止跨会话结果投递。</td></tr>
+      </tbody>
+    </table></div>
+    <p>组件/store 通过构造器注入仓库；平台动作通过可重新绑定的 facade/事件接线，不捕获 Activity、Window、View、FocusRequester。所有导航和状态提交在主线程执行，IO 在适当 dispatcher；工作线程不能直接驱动 Decompose 导航。</p>
+  </section>
+
+  <section id="restore">
+    <h2>08 / UI 保存、重建、认证与平台宿主</h2>
+    <h3>8.1 UI 保存边界</h3>
+    <ul>
+      <li>栏目宿主建立以 SectionId 为 key 的 saveable 保存域，栏目内使用 Decompose 稳定版 Children；entry 以 entryId 绑定恢复。即使栏目 UI 整体离开组合，也要保留其 saveable 域。</li>
+      <li>普通 remember 的状态必须逐项审计：应保留的改为组件状态或 rememberSaveable + 显式 Saver；敏感输入和临时焦点仍不保存。page 销毁立即清其保存域，session 销毁清栏目域。</li>
+      <li>列表/网格保存稳定 itemId + offset 和必要 index fallback；规则更新、条目删除或列数变化后选择最近有效锚点。内容未就绪前不执行一次性恢复，避免空列表先消费锚点。</li>
+      <li>离屏/重组不重复强制 scrollTo；数据稳定后只应用一次待恢复锚点。返回后的同布局应保持位置，跨布局不承诺同像素位置。</li>
+      <li>桌面所有改动的可滚动区域必须保留可见可拖动滚动条，并绑定同一滚动状态；仅实际溢出时显示。</li>
+    </ul>
+    <h3>8.2 StateKeeper 恢复格式</h3>
+    <p>使用版本化 <code>NavigationSnapshotV1</code> / 各页小型 Snapshot，保存已访问栏目、选中栏目、entryId/目的地参数、输入/已提交条件、滚动锚点和阅读位置。选择一个真实恢复来源，不能同时从多份 JSON/Compose 状态表恢复同一业务字段。</p>
+    <ul>
+      <li>禁止保存完整网络结果、Bitmap、页图 URL 列表、服务对象、原生句柄、token、密码、锁图案。业务草稿与查询属于用户隐私，不输出到日志/诊断明文。</li>
+      <li>恢复后仅首次活跃页按需加载；分页页范围只是恢复提示，逐页重建至锚点可定位或服务端末页，不把恢复数字当作已加载结果；失败保留待恢复锚点供显式重试，期间允许取消/返回。</li>
+      <li>已在内存的普通返回保留全部分页，不走上述重建流程。未激活的栈中页不为“恢复滚动位置”后台批量请求。</li>
+      <li>业务快照设置 256 KiB 编码预算并测试；超限先剔除可选草稿/次要 UI 保存信息，不在运行中销毁栈。必要导航仍超预算或格式损坏时放弃该恢复快照，安全回 Home，并保留持久化阅读记录；禁止静默恢复到其他账号。</li>
+      <li>总 Android saved state 还包含框架保存域，须在深栈/长输入压力用例验证，不能以业务快照小于预算替代实际宿主恢复测试。</li>
+      <li>当前无持久导航格式，首次升级冷启动无需复活旧内存栈；未来未知 schema 版本按安全回 Home 处理，不崩溃。</li>
+    </ul>
+    <h3>8.3 Android</h3>
+    <ul>
+      <li>Activity 在 onCreate 创建接入 Activity saved state / lifecycle / instance retention 的根 ComponentContext；使用非整体 retained root + InstanceKeeper store 方案，UI 观察新组件外壳而复用业务 store。不要再在 KicaApp 内 remember 根树作为全部接线。</li>
+      <li>配置变更不销毁业务 store；最终 finish/entry pop 才清理相关实例。ActivityResult、文件树选择、权限和安全窗口 flag 沿用现有宿主职责，新 Activity 重新绑定 facade。</li>
+      <li>Root 初始为 Restoring，restoreSession 每个宿主会话只执行一次；认证未决不展示旧 Main/敏感内容。验证会话后才接入匹配的导航恢复，不匹配则丢弃旧 Main 快照。</li>
+      <li>恢复边界包含不承载凭据的账户标识及登录会话标记；同账号显式重新登录也是新会话，不能仅凭 email 相等复活旧栈。会话标记由认证层维护，登出失效，token 不进快照。</li>
+      <li>每次宿主冷恢复，按现有设置初始化应用锁，不能从 saved state 恢复“已解锁”绕过安全；已存在会话的配置重建不重复执行网络恢复。</li>
+    </ul>
+    <h3>8.4 Desktop 与独立 AI Activity</h3>
+    <p>Desktop 在 UI 主线程建立根上下文，生命周期跟随真实窗口最小化、恢复和最终关闭；以官方 LifecycleController 或等效接线实现，正常关闭先有界收尾再销毁 root，不另开服务器或窗口替代现有应用。仅保存运行期栏目/页面，不新增磁盘全栈恢复。</p>
+    <p>AI 操作选项 Activity 创建自己的上下文/store/saveable 域，重建保留状态，finish 释放；设置写入与 SAEP 策略更新通过新宿主回调绑定。必须保留独立 Activity 的声明、平台启动入口及 SAEP 对该 Activity 的策略识别；返回由 Activity finish 回到原主界面，不操作主栏目栈。验收须确认策略仍以 Activity 为单位生效，且该页禁止 Agent 操作、不受主页面策略放开影响。不得复用 Main 实例、扩大 Agent 权限或改变安全策略。</p>
+    <h3>8.5 内存边界</h3>
+    <p>运行期不自动淘汰仍在栈内的页面业务状态，避免违反已确认规则；栏目惰性创建，图片交给图片库缓存，不由每页持有 Bitmap。pop/logout 必须释放 store、任务和 UI 保存域。压力测试记录深栈占用与释放后趋势；若需要栈深上限/淘汰，须另做产品决策，不能暗中削弱保留契约。</p>
+  </section>
+
+  <section id="migration">
+    <h2>09 / 工程落地与旧实现清理</h2>
+    <p><strong>依赖基线：</strong>Decompose 3.6.2（前期已核验稳定发布）及同版本 extensions-compose；Essenty 使用与之匹配的版本，直接调用其 API 时显式声明所需模块。先验证现有 Kotlin 2.4.21 / Compose 1.12.2 / Fluent 组合，不擅自升级或降级工具链；若不兼容，提交具体冲突与调整建议，不能切回另一导航库冒充完成。</p>
+    <p>使用稳定 API，不引入 extensions-compose-experimental。本轮不要求转场动画；若加入基础转场，退出页立刻停止接受用户动作，销毁与保存域回收不得无限等待动画。Desktop release 若启用混淆，补齐 Decompose 主线程检查器等必要规则并验证。</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>现有位置</th><th>必须完成的变化</th></tr></thead>
+      <tbody>
+        <tr><td><a href="../../gradle/libs.versions.toml">版本目录</a> / <a href="../../shared/build.gradle.kts">shared 构建</a></td><td>添加依赖及测试依赖，记录实际解析版本；不引入 Nav3/Voyager。</td></tr>
+        <tr><td><a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/KicaApp.kt">KicaApp</a></td><td>改为 root 渲染入口；移除 mutableStateListOf 导航、route.toString 保存键、searchPages/readerSessions/retainedPages 和旧清栈逻辑。</td></tr>
+        <tr><td><a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/Screens.kt">Screens</a></td><td>替换旧路由分发/rememberRandomComicsLoader；随机共享 store 迁入会话；纯模型转换函数可保留或拆分。</td></tr>
+        <tr><td><a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/store/ComicListStore.kt">ComicListStore（替代旧 SearchPageState）</a> / <a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/screen/ReaderEntrySession.kt">ReaderEntrySession</a></td><td>移除 CompositionLocal Map；复用必要纯逻辑进入组件/store，不保留旧状态注册入口。</td></tr>
+        <tr><td>全部主页面与弹层</td><td>按第 04 节组件化；剥离页面级网络 produceState/LaunchedEffect 与业务 rememberCoroutineScope；允许 UI 特有效应，逐项说明归属。</td></tr>
+        <tr><td><a href="../../androidApp/src/main/kotlin/top/ntutn/kica/MainActivity.kt">Android 主宿主</a> / <a href="../../desktopApp/src/main/kotlin/top/ntutn/kica/desktop/Main.kt">Desktop 主宿主</a></td><td>真实生命周期、恢复、平台 facade 重绑和最终销毁接线；下载/翻译服务仍是应用级。</td></tr>
+        <tr><td><a href="../../androidApp/src/main/kotlin/top/ntutn/kica/AiOperationOptionsActivity.kt">AI Activity</a> / <a href="../../shared/src/commonMain/kotlin/top/ntutn/kica/ui/screen/AiOperationOptionsScreen.kt">AI 页面</a></td><td>独立组件宿主与无仓库加载的 UI，保留现有安全边界。</td></tr>
+        <tr><td><a href="../../shared/src/commonTest/kotlin/top/ntutn/kica/ui/KicaNavigationTest.kt">导航测试</a>及既有阅读器测试</td><td>删除仅约束旧 List 栈的实现测试，迁移为行为测试；保留并扩展阅读入口、分页、键盘与写入顺序回归。</td></tr>
+      </tbody>
+    </table></div>
+    <p>建议新增职责目录（名称可按代码风格调整）：<code>navigation/</code> 放 Root/Main/Section、配置与返回；<code>component/</code> 按页面拆分组件/store；<code>state/</code> 放快照/锚点；会话协调器归业务层。禁止把全部组件塞进单个巨型文件；每个文本文件默认不超过 500 行。</p>
+    <ol>
+      <li>建立假仓库请求计数、可控制延迟与导航生命周期测试；完成依赖解析。</li>
+      <li>实现 Root/Main/ChildPages/Section/EntryId、认证边界与平台宿主接线。</li>
+      <li>迁移全部页面/store、SessionData、阅读进度写入与 UI 保存机制。</li>
+      <li>统一返回优先级、屏蔽/实体更新、配置及进程恢复；清理全部旧导航与状态表。</li>
+      <li>同一交付中完成双平台构建、自动化、人工返回验证和资源压力记录，再进入合并验收。</li>
+    </ol>
+    <div class="note warn">以上是实施顺序，不是分批上线范围。未完成任一主页面、宿主恢复或旧路径删除时，不能把迁移标记完成；不留生产 feature flag 让两套导航长期并存。回滚采用整项变更回退，不改数据库格式。</div>
+  </section>
+
+  <section id="acceptance">
+    <h2>10 / 验收矩阵与 Definition of Done</h2>
+    <p>自动化使用可控制 fake repository、假平台服务、协程测试调度器与生命周期驱动器；分别计数 recommendations/categories/ranking/favorites/search/comic/episodes/pages，并区分标签补查、显式操作。纯导航计数断言在已有任务稳定后取基线，不能把合法初始在途请求完成算成新增请求。</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>操作</th><th>必须断言</th><th>验证层</th></tr></thead>
+      <tbody>
+        <tr><td>A01</td><td>收藏加载多页 → 详情 → 返回</td><td>结果/页数/锚点不丢；favorites 新调用为 0；无整页 Loading。</td><td>共享自动化 + 双平台 UI。</td></tr>
+        <tr><td>A02</td><td>发现选非默认周期 → 详情 → 返回</td><td>周期、结果、锚点保留；ranking/categories 新调用为 0。</td><td>共享自动化 + UI。</td></tr>
+        <tr><td>A03</td><td>详情 → 阅读器 → 返回</td><td>comic/episodes 不重载；进度局部更新；离线回退和章节切换不退化。</td><td>共享自动化 + 双平台。</td></tr>
+        <tr><td>A04</td><td>搜索 → A → 标签搜索 → A</td><td>重复参数不同 entryId；各查询、分页、锚点独立；实体变动共享。</td><td>共享自动化。</td></tr>
+        <tr><td>A05</td><td>跨六栏目往返及再次点当前栏目</td><td>各子栈恢复；远端栏目未 DESTROYED；未访问栏目无请求；Home 回退语义符合第 06 节。</td><td>生命周期自动化 + UI。</td></tr>
+        <tr><td>A06</td><td>菜单/帮助/抽屉叠层后返回</td><td>每次只关闭最上层；UI 返回、Android 系统键/手势、Desktop Esc 一致，根页行为正确。</td><td>双平台人工 + 返回分发测试。</td></tr>
+        <tr><td>A07</td><td>锁屏前后阅读、跨章、选择进度</td><td>不丢决定/实际页/跨章意图，不重复请求或询问；锁屏不能 pop 背后栈。</td><td>共享自动化 + 双平台。</td></tr>
+        <tr><td>A08</td><td>Activity 重建与真正进程回收分别验证</td><td>前者 store 身份/请求计数不变；后者有效栏目/entry/条件恢复，数据可重建；恢复阅读无伪进度。</td><td>Android 宿主集成/设备。</td></tr>
+        <tr><td>A09</td><td>查询/分页中返回、刷新、快速重入、登出</td><td>旧 generation 不回写；无永久 busy；旧账号结果不污染新会话；同账号重新登录也不复活旧树。</td><td>延迟 fake 自动化。</td></tr>
+        <tr><td>A10</td><td>取消/新增收藏、点赞、屏蔽、历史/下载更新</td><td>相关页及时更新且锚点合理；不全局重载；静默集合校验仅由 dirty 变更触发。</td><td>共享自动化 + UI。</td></tr>
+        <tr><td>A11</td><td>Reader 切模式、旧布局回调、pop、关闭窗口</td><td>只保存实际有效页；FIFO 不倒退；最后已接受有效写入完成或明确失败；快捷键/失焦去重保持。</td><td>写入测试 + 双平台。</td></tr>
+        <tr><td>A12</td><td>多次深栈 push/pop、切栏目、窗口最小化/关闭</td><td>出栈 store onDestroy 恰一次，任务/订阅释放，无旧宿主引用；下载不中断；内存释放趋势可解释。</td><td>生命周期自动化 + profiler 记录。</td></tr>
+        <tr><td>A13</td><td>长输入、深栈快照、损坏/未知 schema、账户不匹配</td><td>预算及降级有效；不崩溃/不泄露敏感输入；安全回 Home；不绕过锁屏。</td><td>序列化自动化 + Android 宿主。</td></tr>
+        <tr><td>A14</td><td>列表过滤/删项、网格列数变化、设置草稿</td><td>有效锚点恢复一次；dirty 草稿不被外部设置覆盖；桌面同状态可拖动滚动条正常。</td><td>双平台 UI。</td></tr>
+        <tr><td>A15</td><td>Home/Random 互切、AI Activity 重建、导出/文件框</td><td>随机结果共享且不重抽；AI 安全与策略版本不变；平台结果绑定正确宿主。</td><td>共享/平台集成 + 人工。</td></tr>
+      </tbody>
+    </table></div>
+    <h3>合并门槛（全部满足）</h3>
+    <ul>
+      <li>全部 R01–R10、A01–A15 有测试或验证记录；不能把“未测”写成通过。无真机/桌面图形环境时如实列待验项目，迁移状态保持待验。</li>
+      <li>Android 与 Desktop 实际编译通过；运行共享/桌面测试及可用 Android 测试；实施时先核实 Gradle 真实任务名，附命令、结果和环境，不以 spec 中的预期替代执行。</li>
+      <li>Android Activity/进程恢复、系统返回键/手势及 Desktop Esc/最小化/关闭须在对应环境验证，不由 JVM 纯逻辑测试代替。</li>
+      <li>代码搜索确认无旧根级导航栈和 Search/Reader Map 接线；逐项审计页面业务 produceState/LaunchedEffect，剩余 UI effect 有明确职责。</li>
+      <li>运行 <code>python3 scripts/check_file_lines.py</code>；禁止通过压缩代码/扩大忽略规则规避 500 行约束；遵守现有 UI 返回、桌面滚动条与 FileProvider 最小路径权限约束。</li>
+      <li>更新实施记录列出依赖实际版本、页面覆盖、回归结果、内存/任务释放观察及已知限制；无未完成页面、无双轨切换、无伪装为“已实现”的验收项。</li>
+    </ul>
+  </section>
+
+  <section id="references">
+    <h2>11 / 参考与明确限制</h2>
+    <ul>
+      <li><a href="https://arkivanov.github.io/Decompose/navigation/stack/overview/">ChildStack</a>：栈内组件生命周期、配置身份与恢复。</li>
+      <li><a href="https://arkivanov.github.io/Decompose/navigation/pages/overview/">ChildPages</a>、<a href="https://raw.githubusercontent.com/arkivanov/Decompose/3.6.2/decompose/src/commonMain/kotlin/com/arkivanov/decompose/router/pages/ChildPagesFactory.kt">3.6.2 ChildPagesFactory 源码</a>：pageStatus、默认远端销毁及自动返回开关。</li>
+      <li><a href="https://arkivanov.github.io/Decompose/component/instance-retaining/">InstanceKeeper</a>、<a href="https://arkivanov.github.io/Decompose/component/state-preservation/">StateKeeper</a>：内存保留不等于进程重建。</li>
+      <li><a href="https://arkivanov.github.io/Decompose/extensions/compose/">Compose 扩展</a>：Children UI 保存、Desktop 生命周期和 release 混淆注意事项。</li>
+      <li><a href="https://github.com/arkivanov/Decompose/releases/tag/3.6.2">Decompose 3.6.2 发布记录</a>；版本组合兼容性仍以实际构建验证为准。</li>
+      <li><a href="comic-tag-interactions.html">标签交互 spec</a>、<a href="reader-progress-choice.html">阅读进度选择 spec</a>、<a href="desktop-reader-keyboard.html">桌面键盘 spec</a>：既有业务行为基线。</li>
+    </ul>
+    <p class="meta">运行期完整保留以进程仍存活、组件未出栈为前提；系统强杀、极端 saved state 超预算及未知格式走明确降级。本文不承诺零内存增长、所有情况像素级恢复或强杀前最后一帧进度必定落盘。</p>
+  </section>
+  <footer>v1.1 · 全量实现及本轮可执行回归已完成；最终通过项、环境限制与未验项目以<a href="decompose-migration-validation.md">实施与验证记录</a>为准，不以本规格的全部人工验收要求冒充已执行结果。</footer>
+</main>
+</body>
+</html>

@@ -4,6 +4,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.window.rememberWindowState
+import com.arkivanov.decompose.DefaultComponentContext
+import com.arkivanov.essenty.lifecycle.LifecycleRegistry
+import com.arkivanov.essenty.lifecycle.create
+import com.arkivanov.essenty.lifecycle.resume
+import com.arkivanov.essenty.lifecycle.stop
+import com.arkivanov.essenty.lifecycle.destroy
+import kotlinx.coroutines.launch
+import top.ntutn.kica.ui.navigation.AppServices
+import top.ntutn.kica.ui.navigation.RootComponent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
@@ -79,32 +90,49 @@ private fun ApplicationScope.KicaDesktopApp() {
         DesktopDownloadCoordinator(library, HttpDownloadExecutor(pica))
     }
 
+    val lifecycle = remember { LifecycleRegistry().apply { create() } }
+    val root = remember {
+        RootComponent(DefaultComponentContext(lifecycle), AppServices(pica, library, downloads, platform, titleTranslation))
+    }
+    val windowState = rememberWindowState(width = 1200.dp, height = 800.dp)
+    val scope = rememberCoroutineScope()
+    val closing = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    LaunchedEffect(windowState.isMinimized) {
+        if (windowState.isMinimized) lifecycle.stop() else lifecycle.resume()
+    }
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            if (closing.compareAndSet(false, true)) scope.launch {
+                try { root.close() } finally { lifecycle.destroy(); exitApplication() }
+            }
+        },
         title = "Kica",
         icon = painterResource(Res.drawable.kica_icon),
-        state = WindowState(width = 1200.dp, height = 800.dp),
+        state = windowState,
     ) {
         DisposableEffect(platform, window) {
             platform.dialogParent = FileKitDialogParent.awt(window)
             onDispose { platform.dialogParent = null }
+        }
+        DisposableEffect(root, window) {
+            val listener = object : java.awt.event.WindowFocusListener {
+                override fun windowLostFocus(event: java.awt.event.WindowEvent?) = root.onHostBackground()
+                override fun windowGainedFocus(event: java.awt.event.WindowEvent?) = root.onHostForeground()
+            }
+            window.addWindowFocusListener(listener)
+            onDispose { window.removeWindowFocusListener(listener) }
         }
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(880, 600)
         }
         DisposableEffect(downloads, titleTranslation) {
             onDispose {
+                lifecycle.destroy()
                 downloads.close()
                 titleTranslation.close()
             }
         }
-        KicaApp(
-            picaRepository = pica,
-            libraryRepository = library,
-            downloadCoordinator = downloads,
-            platformServices = platform,
-            titleTranslationService = titleTranslation,
-        )
+        KicaApp(root)
     }
 }
 

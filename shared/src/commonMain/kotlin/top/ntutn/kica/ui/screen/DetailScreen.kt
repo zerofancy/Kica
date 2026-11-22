@@ -17,13 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,24 +37,17 @@ import io.github.composefluent.icons.regular.ArrowDownload
 import io.github.composefluent.icons.regular.ArrowLeft
 import io.github.composefluent.icons.regular.Heart
 import io.github.composefluent.icons.regular.Star
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
-import top.ntutn.kica.data.DownloadCoordinator
-import top.ntutn.kica.data.PicaRepository
 import top.ntutn.kica.data.PlatformServices
-import top.ntutn.kica.model.ComicDetail
-import top.ntutn.kica.model.LoadState
 import top.ntutn.kica.resources.Res
 import top.ntutn.kica.resources.author
 import top.ntutn.kica.resources.back
 import top.ntutn.kica.resources.categories
 import top.ntutn.kica.resources.download
-import top.ntutn.kica.resources.downloads
 import top.ntutn.kica.resources.episodes
 import top.ntutn.kica.resources.favorite
 import top.ntutn.kica.resources.finished
 import top.ntutn.kica.resources.like
-import top.ntutn.kica.resources.load_failed
 import top.ntutn.kica.resources.no_description
 import top.ntutn.kica.resources.ongoing
 import top.ntutn.kica.resources.read
@@ -71,37 +60,22 @@ import top.ntutn.kica.ui.component.FluentIconButton
 import top.ntutn.kica.ui.component.FluentScaffold
 import top.ntutn.kica.ui.component.SectionTitle
 import top.ntutn.kica.ui.state.translatedTitle
-import top.ntutn.kica.ui.toSummary
 import top.ntutn.kica.ui.component.LoadStateContent
 import top.ntutn.kica.ui.PlatformVerticalScrollbar
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun DetailScreen(
-    comicId: String,
-    repository: PicaRepository,
-    downloads: DownloadCoordinator,
+    store: top.ntutn.kica.ui.store.DetailStore,
     platformServices: PlatformServices,
     library: top.ntutn.kica.data.LibraryRepository,
     onTagSearch: (String) -> Unit,
     onBack: () -> Unit,
     onRead: (String) -> Unit,
 ) {
-    var refresh by remember { mutableIntStateOf(0) }
-    val loadFailed = stringResource(Res.string.load_failed)
-    val state by produceState<LoadState<Pair<ComicDetail, List<top.ntutn.kica.model.Episode>>>>(
-        LoadState.Loading,
-        comicId,
-        refresh,
-    ) {
-        value = runCatching { repository.comic(comicId) to repository.episodes(comicId) }
-            .fold({ LoadState.Data(it) }, { LoadState.Error(it.message ?: loadFailed) })
-    }
-    val scope = rememberCoroutineScope()
-    val downloadLocation by produceState("") {
-        value = platformServices.fileLocationProvider.defaultDownloadLocation()
-    }
-
+    val state by store.state.collectAsState()
+    val favoriteBusy by store.favoriteBusy.collectAsState()
+    val likeBusy by store.likeBusy.collectAsState()
     FluentScaffold(
         topBar = {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -111,13 +85,11 @@ internal fun DetailScreen(
             }
         },
     ) { padding ->
-        LoadStateContent(state, Modifier.padding(padding), onRetry = { refresh++ }) { (comic, episodeItems) ->
+        LoadStateContent(state, Modifier.padding(padding), onRetry = { store.refresh() }) { (comic, episodeItems) ->
             val scrollState = rememberScrollState()
             val displayTitle = translatedTitle(comic.title)
-            var isFavorite by remember(comic.id, comic.isFavorite) { mutableStateOf(comic.isFavorite) }
-            var isLiked by remember(comic.id, comic.isLiked) { mutableStateOf(comic.isLiked) }
-            var favoriteBusy by remember(comic.id) { mutableStateOf(false) }
-            var likeBusy by remember(comic.id) { mutableStateOf(false) }
+            val isFavorite = comic.isFavorite
+            val isLiked = comic.isLiked
             Box(Modifier.fillMaxSize()) {
                 Column(
                     Modifier.fillMaxSize().verticalScroll(scrollState).padding(20.dp),
@@ -138,17 +110,7 @@ internal fun DetailScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     FluentButton(
-                                        onClick = {
-                                            val previous = isFavorite
-                                            isFavorite = !previous
-                                            favoriteBusy = true
-                                            scope.launch {
-                                                val succeeded = runCatching { repository.toggleFavorite(comic.id) }
-                                                    .getOrDefault(false)
-                                                if (!succeeded) isFavorite = previous
-                                                favoriteBusy = false
-                                            }
-                                        },
+                                        onClick = store::favorite,
                                         enabled = !favoriteBusy,
                                         modifier = Modifier.weight(1f),
                                     ) {
@@ -164,17 +126,7 @@ internal fun DetailScreen(
                                         )
                                     }
                                     FluentButton(
-                                        onClick = {
-                                            val previous = isLiked
-                                            isLiked = !previous
-                                            likeBusy = true
-                                            scope.launch {
-                                                val succeeded = runCatching { repository.like(comic.id) }
-                                                    .getOrDefault(false)
-                                                if (!succeeded) isLiked = previous
-                                                likeBusy = false
-                                            }
-                                        },
+                                        onClick = store::like,
                                         enabled = !likeBusy,
                                         modifier = Modifier.weight(1f),
                                     ) {
@@ -237,15 +189,7 @@ internal fun DetailScreen(
                                     Text(stringResource(Res.string.read))
                                 }
                                 FluentIconButton(
-                                    onClick = {
-                                        scope.launch {
-                                            downloads.enqueue(
-                                                comic = comic.toSummary(),
-                                                episode = episode,
-                                                targetLocation = downloadLocation,
-                                            )
-                                        }
-                                    },
+                                    onClick = { store.download(episode) },
                                 ) {
                                     Icon(Icons.Regular.ArrowDownload, contentDescription = stringResource(Res.string.download))
                                 }
