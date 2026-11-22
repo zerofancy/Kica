@@ -18,7 +18,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
+import top.ntutn.kica.ui.modal.AppPopup
 import androidx.compose.ui.window.PopupProperties
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
@@ -45,7 +45,7 @@ internal fun ReaderImageContextMenu(
     onSave: (PageRef) -> Unit,
 ) {
     val popupOrigin = menu.pageWindowOrigin + menu.clickLocalOffset
-    Popup(
+    AppPopup(
         alignment = Alignment.TopStart,
         offset = popupOrigin,
         onDismissRequest = onDismiss,

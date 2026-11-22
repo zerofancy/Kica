@@ -3,6 +3,10 @@ package top.ntutn.kica.desktop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import top.ntutn.kica.update.UpdateHostActions
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.window.rememberWindowState
@@ -90,22 +94,30 @@ private fun ApplicationScope.KicaDesktopApp() {
         DesktopDownloadCoordinator(library, HttpDownloadExecutor(pica))
     }
 
+    val updates = remember { DesktopUpdateRuntime(dataDirectory) }
     val lifecycle = remember { LifecycleRegistry().apply { create() } }
     val root = remember {
-        RootComponent(DefaultComponentContext(lifecycle), AppServices(pica, library, downloads, platform, titleTranslation))
+        RootComponent(DefaultComponentContext(lifecycle), AppServices(pica, library, downloads, platform, titleTranslation, updates = updates))
     }
     val windowState = rememberWindowState(width = 1200.dp, height = 800.dp)
     val scope = rememberCoroutineScope()
     val closing = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val closeGracefully: () -> Unit = {
+        if (closing.compareAndSet(false, true)) scope.launch {
+            try {
+                try { root.close() } finally { updates.close() }
+            } finally {
+                lifecycle.destroy()
+                exitApplication()
+            }
+        }
+    }
+    var foreground by remember { mutableStateOf(false) }
     LaunchedEffect(windowState.isMinimized) {
         if (windowState.isMinimized) lifecycle.stop() else lifecycle.resume()
     }
     Window(
-        onCloseRequest = {
-            if (closing.compareAndSet(false, true)) scope.launch {
-                try { root.close() } finally { lifecycle.destroy(); exitApplication() }
-            }
-        },
+        onCloseRequest = closeGracefully,
         title = "Kica",
         icon = painterResource(Res.drawable.kica_icon),
         state = windowState,
@@ -115,12 +127,27 @@ private fun ApplicationScope.KicaDesktopApp() {
             onDispose { platform.dialogParent = null }
         }
         DisposableEffect(root, window) {
-            val listener = object : java.awt.event.WindowFocusListener {
-                override fun windowLostFocus(event: java.awt.event.WindowEvent?) = root.onHostBackground()
-                override fun windowGainedFocus(event: java.awt.event.WindowEvent?) = root.onHostForeground()
+            val manager = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+            fun updateForeground() {
+                var active = manager.activeWindow
+                while (active != null && active !== window) active = active.owner
+                val nowForeground = active === window && !windowState.isMinimized
+                if (foreground != nowForeground) {
+                    foreground = nowForeground
+                    if (nowForeground) root.onHostForeground() else root.onHostBackground()
+                }
             }
-            window.addWindowFocusListener(listener)
-            onDispose { window.removeWindowFocusListener(listener) }
+            var disposed = false
+            // Defer transient null activeWindow events during owner -> owned dialog activation.
+            val listener = java.beans.PropertyChangeListener {
+                javax.swing.SwingUtilities.invokeLater { if (!disposed) updateForeground() }
+            }
+            manager.addPropertyChangeListener("activeWindow", listener)
+            updateForeground()
+            onDispose {
+                disposed = true
+                manager.removePropertyChangeListener("activeWindow", listener)
+            }
         }
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(880, 600)
@@ -132,7 +159,11 @@ private fun ApplicationScope.KicaDesktopApp() {
                 titleTranslation.close()
             }
         }
-        KicaApp(root)
+        KicaApp(
+            root,
+            foreground = foreground && !windowState.isMinimized,
+            updateActions = UpdateHostActions(exitForManualInstall = closeGracefully),
+        )
     }
 }
 

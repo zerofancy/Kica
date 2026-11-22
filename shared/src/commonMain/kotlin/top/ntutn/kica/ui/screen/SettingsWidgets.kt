@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import top.ntutn.kica.ui.modal.AppDialog
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
 import org.jetbrains.compose.resources.stringResource
@@ -30,7 +30,7 @@ internal fun ModelDownloadConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         PlatformBackHandler(enabled = true, onBack = onDismiss)
         FluentCard(Modifier.width(440.dp)) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

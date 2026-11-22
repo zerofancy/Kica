@@ -30,6 +30,7 @@ class KicaApplication : Application() {
             cache = SqlTitleTranslationCache(database),
         )
         container = AndroidContainer(
+            updates = AndroidUpdateRuntime(this),
             platform = platform,
             library = library,
             pica = pica,
@@ -42,6 +43,7 @@ class KicaApplication : Application() {
 }
 
 internal data class AndroidContainer(
+    val updates: AndroidUpdateRuntime,
     val platform: AndroidPlatformServices,
     val library: LibraryRepository,
     val pica: RealPicaRepository,

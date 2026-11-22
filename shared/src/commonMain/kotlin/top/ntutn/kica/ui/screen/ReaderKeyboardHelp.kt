@@ -30,7 +30,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import top.ntutn.kica.ui.modal.AppDialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
@@ -54,7 +54,7 @@ import top.ntutn.kica.ui.component.FluentTextButton
 
 @Composable
 internal fun ReaderKeyboardHelp(mode: ReaderMode, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(dismissOnBackPress = false)) {
+    AppDialog(onDismissRequest = onDismiss, properties = DialogProperties(dismissOnBackPress = false)) {
         PlatformBackHandler(enabled = true, onBack = onDismiss)
         val closeFocus = remember { FocusRequester() }
         val scroll = rememberScrollState()

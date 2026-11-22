@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import top.ntutn.kica.ui.modal.AppDialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Text
@@ -130,7 +130,7 @@ private fun ReaderProgressDialog(
     onStartOver: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onCancel, properties = DialogProperties(dismissOnBackPress = false)) {
+    AppDialog(onDismissRequest = onCancel, properties = DialogProperties(dismissOnBackPress = false)) {
         PlatformBackHandler(true, onCancel)
         val continueFocus = remember { FocusRequester() }
         val scroll = rememberScrollState()

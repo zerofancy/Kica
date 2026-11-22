@@ -1,4 +1,5 @@
 import java.io.File
+import java.util.Properties
 import javax.inject.Inject
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
@@ -42,7 +43,58 @@ dependencies {
     implementation(libs.jna.platform)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.logback.classic)
+    testImplementation(kotlin("test"))
 }
+
+val releaseMetadata = Properties().apply {
+    rootProject.file("release.properties").inputStream().use { load(it) }
+}
+
+// Only these actual installer tasks identify a supported installation source.
+// Generated content is an input to compilation, so a following dev run cannot reuse release flags.
+val requestedPackaging = gradle.startParameter.taskNames.map { it.substringAfterLast(':') }
+val buildOs = System.getProperty("os.name").let {
+    when { it.startsWith("Windows", true) -> "Windows"; it == "Linux" -> "Linux"; else -> "Unknown" }
+}
+val buildArch = System.getProperty("os.arch").lowercase().let {
+    when (it) { "amd64", "x86_64" -> "X86_64"; "aarch64", "arm64" -> "ARM64"; else -> "Unknown" }
+}
+val installerType = when {
+    buildOs == "Linux" && "packageDeb" in requestedPackaging -> "deb"
+    buildOs == "Windows" && "packageReleaseExe" in requestedPackaging -> "exe"
+    else -> "unknown"
+}
+val desktopVersionCode = releaseMetadata.getProperty(
+    if (buildOs == "Windows") "windowsVersionCode" else "linuxVersionCode",
+).toLong().also { require(it > 0) }
+val generatedUpdateMetadata = layout.buildDirectory.dir("generated/updateMetadata/kotlin")
+val generateUpdateMetadata = tasks.register("generateUpdateMetadata") {
+    val values = mapOf(
+        "versionCode" to desktopVersionCode.toString(),
+        "versionName" to releaseMetadata.getProperty("versionName"),
+        "os" to buildOs, "arch" to buildArch, "packageType" to installerType,
+        "releaseBuild" to (installerType != "unknown").toString(),
+    )
+    inputs.properties(values)
+    outputs.dir(generatedUpdateMetadata)
+    doLast {
+        val output = generatedUpdateMetadata.get().file("top/ntutn/kica/desktop/DesktopBuildMetadata.kt").asFile
+        output.parentFile.mkdirs()
+        output.writeText("""
+            package top.ntutn.kica.desktop
+            internal object DesktopBuildMetadata {
+                const val versionCode: Long = ${values.getValue("versionCode")}L
+                const val versionName = "${values.getValue("versionName") }"
+                const val os = "${values.getValue("os") }"
+                const val arch = "${values.getValue("arch") }"
+                const val packageType = "${values.getValue("packageType") }"
+                const val releaseBuild = ${values.getValue("releaseBuild")}
+            }
+        """.trimIndent() + "\n")
+    }
+}
+kotlin.sourceSets.main { kotlin.srcDir(generatedUpdateMetadata) }
+tasks.named("compileKotlin") { dependsOn(generateUpdateMetadata) }
 
 compose.desktop {
     application {
@@ -53,7 +105,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Kica"
-            packageVersion = "0.1.3"
+            packageVersion = releaseMetadata.getProperty("versionName")
             description = "A Fluent cross-platform PicACG client"
             vendor = "ntutn"
             modules("java.net.http", "java.sql", "jdk.charsets", "jdk.security.auth")

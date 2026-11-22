@@ -24,7 +24,11 @@ import top.ntutn.kica.ui.theme.KicaFluentTheme
 
 /** Rendering only: navigation and page lifetimes belong to the platform-owned root. */
 @Composable
-fun KicaApp(root: RootComponent) {
+fun KicaApp(
+    root: RootComponent,
+    updateActions: top.ntutn.kica.update.UpdateHostActions = top.ntutn.kica.update.UpdateHostActions(),
+    foreground: Boolean = true,
+) {
     val state by root.state.collectAsState()
     val slot by root.main.subscribeAsState()
     val main = slot.child?.takeIf { it.configuration.sessionKey == state.sessionKey }?.instance
@@ -35,7 +39,16 @@ fun KicaApp(root: RootComponent) {
     val stack = section?.stack?.subscribeAsState()?.value
     val reader = stack?.active?.instance?.route is AppRoute.Reader && !state.locked
 
+    val modalInteractions = top.ntutn.kica.ui.modal.rememberModalInteractionState()
+    val updateReady = foreground && !state.restoring && !state.locked && !state.loggingOut
+    LaunchedEffect(root.updates, updateReady) {
+        if (updateReady) root.updates?.automaticCheck()
+    }
+
     CompositionLocalProvider(
+        top.ntutn.kica.ui.update.LocalUpdateStore provides root.updates,
+        top.ntutn.kica.ui.component.LocalSettingsAboutContent provides { top.ntutn.kica.ui.update.UpdateSettings() },
+        top.ntutn.kica.ui.modal.LocalModalInteractionState provides modalInteractions,
         LocalTitleTranslationService provides services.translation,
         LocalTagResolver provides tagResolver,
         LocalTagLibrary provides services.library,
@@ -67,6 +80,14 @@ fun KicaApp(root: RootComponent) {
                     ServiceErrorBanner(error, root::retryServices,
                         Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(12.dp))
                 }
+                }
+                root.updates?.let { updates ->
+                    top.ntutn.kica.ui.update.UpdateHost(
+                        updates,
+                        actions = updateActions,
+                        foreground = updateReady,
+                        presentationAllowed = !reader,
+                    )
                 }
             }
         }

@@ -21,7 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import top.ntutn.kica.ui.modal.AppDialog
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
@@ -320,6 +320,7 @@ internal fun SettingsScreen(
         }
         SettingCard(stringResource(Res.string.about)) {
             Text(stringResource(Res.string.about_text))
+            top.ntutn.kica.ui.component.LocalSettingsAboutContent.current()
         }
         FluentButton(onClick = onLogout) {
             Text(stringResource(Res.string.logout))
@@ -364,7 +365,7 @@ internal fun SettingsScreen(
         }
     }
     if (showClearLockDialog) {
-        Dialog(onDismissRequest = { showClearLockDialog = false }) {
+        AppDialog(onDismissRequest = { showClearLockDialog = false }) {
             PlatformBackHandler(enabled = true, onBack = { showClearLockDialog = false })
             FluentCard(Modifier.width(360.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

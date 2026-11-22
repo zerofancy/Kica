@@ -1,4 +1,5 @@
 [versions]
+kmp-updater = "v0.3.0"
 kotlin = "2.4.21"
 compose-plugin = "1.12.2"
 compose-runtime = "1.12.2"
@@ -27,6 +28,7 @@ essenty = "2.7.1"
 androidx-test = "1.7.0"
 
 [libraries]
+kmp-updater = { module = "com.github.zerofancy.kmp-updater:kmp-updater", version.ref = "kmp-updater" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-runtime" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-runtime" }
 compose-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-runtime" }

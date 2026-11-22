@@ -22,7 +22,10 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven("https://jitpack.io") {
-            content { includeGroup("com.github.zerofancy.compose-fluent-ui") }
+            content {
+                includeGroup("com.github.zerofancy.compose-fluent-ui")
+                includeGroup("com.github.zerofancy.kmp-updater")
+            }
         }
     }
 }

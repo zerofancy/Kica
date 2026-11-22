@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import top.ntutn.kica.ui.modal.AppDialog
 import coil3.compose.AsyncImage
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.Icon
@@ -288,7 +288,7 @@ private fun CategoryFilterDialog(
     }
     val panelBackground = if (useDarkTheme) Color(0xFF202020) else Color(0xFFFAFAFA)
     val panelBorder = if (useDarkTheme) Color(0xFF4A4A4A) else Color(0xFFC8C8C8)
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         PlatformBackHandler(enabled = true, onBack = onDismiss)
         Box(
             Modifier

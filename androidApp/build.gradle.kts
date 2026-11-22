@@ -10,9 +10,13 @@ plugins {
     alias(libs.plugins.compose)
 }
 
-val localSigningProperties = Properties().apply {
-    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+val releaseMetadata = Properties().apply {
+    rootProject.file("release.properties").inputStream().use { load(it) }
 }
+
+val localSigningProperties by lazy { Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+} }
 
 fun signingProperty(name: String): String? =
     providers.gradleProperty(name).orNull ?: localSigningProperties.getProperty(name)
@@ -54,8 +58,8 @@ android {
         applicationId = "top.ntutn.kica"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.1.3"
+        versionCode = releaseMetadata.getProperty("androidVersionCode").toInt().also { require(it > 0) }
+        versionName = releaseMetadata.getProperty("versionName")
     }
 
     if (keyringSigningEnabled) {
@@ -85,6 +89,8 @@ android {
             )
         }
     }
+
+    buildFeatures { buildConfig = true }
 
     packaging {
         resources {

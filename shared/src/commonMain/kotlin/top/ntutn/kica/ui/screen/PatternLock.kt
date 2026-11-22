@@ -50,6 +50,7 @@ import top.ntutn.kica.resources.lock_set_pattern
 import top.ntutn.kica.ui.component.FluentCard
 import top.ntutn.kica.ui.component.FluentTextButton
 import top.ntutn.kica.ui.PlatformBackHandler
+import top.ntutn.kica.ui.modal.AppDialog
 private const val GRID_SIZE = 3
 private const val DOT_COUNT = GRID_SIZE * GRID_SIZE
 
@@ -283,7 +284,7 @@ internal fun PatternLockSettingsDialog(
 
     PlatformBackHandler(enabled = true, onBack = onDismiss)
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         FluentCard(Modifier.width(340.dp)) {
             Column(
                 Modifier.padding(20.dp),

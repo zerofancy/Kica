@@ -9,9 +9,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import top.ntutn.kica.update.UpdateHostActions
+import top.ntutn.kica.update.UpdateInstallResult
+import top.ntutn.updater.AndroidInstallResult
+import top.ntutn.updater.AndroidInstallSettingsResult
+import top.ntutn.updater.requestAndroidUpdateInstall
+import top.ntutn.updater.openAndroidInstallPermissionSettings
 import top.ntutn.kica.model.AppSettings
 import top.ntutn.kica.ui.KicaApp
 import com.arkivanov.decompose.defaultComponentContext
@@ -19,6 +31,19 @@ import top.ntutn.kica.ui.navigation.AppServices
 import top.ntutn.kica.ui.navigation.RootComponent
 
 class MainActivity : ComponentActivity() {
+    private var foreground by mutableStateOf(false)
+    private var installationJob: Job? = null
+
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+    }
+
+    override fun onPause() {
+        foreground = false
+        installationJob?.cancel()
+        super.onPause()
+    }
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private val legacyStoragePermission =
@@ -52,8 +77,13 @@ class MainActivity : ComponentActivity() {
         }
         val root = RootComponent(
             defaultComponentContext(),
-            AppServices(container.pica, container.library, container.downloads, container.platform, container.titleTranslation),
+            AppServices(container.pica, container.library, container.downloads, container.platform, container.titleTranslation, updates = container.updates),
         )
+        lifecycleScope.launch {
+            root.updateInstallationAllowed.collect { allowed ->
+                if (!allowed) installationJob?.cancel()
+            }
+        }
         setContent {
             val settings by container.library.settings().collectAsState(initial = AppSettings())
             LaunchedEffect(settings.preventScreenshots) {
@@ -63,7 +93,33 @@ class MainActivity : ComponentActivity() {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 }
             }
-            KicaApp(root)
+            KicaApp(
+                root,
+                foreground = foreground,
+                updateActions = UpdateHostActions(
+                    install = { file ->
+                        if (!foreground || !root.canInstallUpdate() || isFinishing || isDestroyed || !container.updates.info.enabled) {
+                            UpdateInstallResult.Failed
+                        } else {
+                            val job = currentCoroutineContext()[Job]
+                            installationJob = job
+                            try {
+                                when (requestAndroidUpdateInstall(this@MainActivity, file)) {
+                                    AndroidInstallResult.Dispatched -> UpdateInstallResult.Dispatched
+                                    AndroidInstallResult.PermissionRequired -> UpdateInstallResult.PermissionRequired
+                                    is AndroidInstallResult.Failed -> UpdateInstallResult.Failed
+                                }
+                            } finally {
+                                if (installationJob === job) installationJob = null
+                            }
+                        }
+                    },
+                    openInstallSettings = {
+                        foreground && root.canInstallUpdate() && !isFinishing && !isDestroyed && container.updates.info.enabled &&
+                            openAndroidInstallPermissionSettings(this@MainActivity) == AndroidInstallSettingsResult.Opened
+                    },
+                ),
+            )
         }
     }
 

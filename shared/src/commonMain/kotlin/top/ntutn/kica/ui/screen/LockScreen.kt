@@ -40,7 +40,10 @@ import top.ntutn.kica.ui.component.FluentPrimaryButton
 import top.ntutn.kica.ui.component.FluentProgressRing
 import top.ntutn.kica.ui.component.FluentTextButton
 import top.ntutn.kica.ui.component.FluentTextField
-import top.ntutn.kica.ui.PlatformBackHandler@Composable
+import top.ntutn.kica.ui.PlatformBackHandler
+import top.ntutn.kica.ui.modal.AppDialog
+
+@Composable
 internal fun LockScreen(
     passwordHash: String,
     onUnlock: () -> Unit,
@@ -128,7 +131,7 @@ internal fun LockSettingsDialog(
 
     PlatformBackHandler(enabled = true, onBack = onDismiss)
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         FluentCard(Modifier.width(400.dp)) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(

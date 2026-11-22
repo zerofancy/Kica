@@ -13,4 +13,5 @@ class AppServices(
     val downloads: DownloadCoordinator,
     val platform: PlatformServices,
     val translation: TitleTranslationService,
+    val updates: top.ntutn.kica.update.UpdateRuntime? = null,
 )

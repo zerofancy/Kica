@@ -26,6 +26,26 @@ import top.ntutn.kica.ui.navigation.SectionId
 @OptIn(ExperimentalCoroutinesApi::class)
 class KicaRootComponentTest {
     @Test
+    fun updateInstallationRequiresRecoveredUnlockedResumedRoot() = navigationTest { clock ->
+        library.updateSettings(AppSettings(lockEnabled = true, lockPasswordHash = "test-hash"))
+        val host = host()
+        val root = root(host)
+        assertFalse(root.canInstallUpdate(), "Recovery must not allow installation")
+        clock.runCurrent()
+        assertFalse(root.canInstallUpdate(), "A locked root must not allow installation")
+        root.unlock()
+        clock.runCurrent()
+        assertTrue(root.canInstallUpdate(), "Anonymous users may update after recovery and unlock")
+        host.lifecycle.stop()
+        assertFalse(root.canInstallUpdate(), "A background host must not allow installation")
+        host.lifecycle.resume()
+        clock.runCurrent()
+        assertTrue(root.canInstallUpdate())
+        root.close()
+        assertFalse(root.canInstallUpdate(), "Shutdown must synchronously prevent new installation")
+    }
+
+    @Test
     fun authenticationMustResolveBeforeCreatingAnInteractiveMainTree() = navigationTest { clock ->
         val gate = CompletableDeferred<Unit>()
         pica.restoreGate = gate

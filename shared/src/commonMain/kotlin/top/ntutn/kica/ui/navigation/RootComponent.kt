@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 
 /** Platform hosts own this shell; InstanceKeeper owns all configuration-retained business stores. */
@@ -27,6 +29,9 @@ class RootComponent(
 ) {
     private val store = context.instanceKeeper.getOrCreate("root-store") { RootStore(services) }
     internal val state = store.state
+    internal val updates = services.updates?.let { runtime ->
+        context.instanceKeeper.getOrCreate("update-store") { top.ntutn.kica.update.UpdateStore(runtime) }
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = LifecycleRegistry().apply { create() }
     private val stateKeeper = NavigationStateKeeper(context.stateKeeper)
@@ -77,6 +82,12 @@ class RootComponent(
         ) gate.resume() else gate.stop()
     }
 
+    /** Hosts cancel pending APK preparation immediately, without waiting for Compose disposal. */
+    val updateInstallationAllowed = state.map { !it.restoring && !it.locked && !it.loggingOut }
+        .distinctUntilChanged()
+    fun canInstallUpdate(): Boolean = context.lifecycle.state == Lifecycle.State.RESUMED &&
+        state.value.let { !it.restoring && !it.locked && !it.loggingOut } && !loggingOut
+
     fun login(email: String, password: String) = store.login(email, password)
     fun unlock() = store.unlock()
     fun retryServices() = store.retryServices()
@@ -90,6 +101,7 @@ class RootComponent(
     suspend fun close() {
         loggingOut = true
         updateGate()
+        updates?.close()
         main.value.child?.instance?.close()
     }
 }
